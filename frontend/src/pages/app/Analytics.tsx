@@ -115,8 +115,8 @@ export default function Analytics() {
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={byRegion} margin={{ left: -16 }}>
               <XAxis dataKey="region" tick={{ fontSize: 11, fill: '#8e8e93' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#8e8e93' }} axisLine={false} tickLine={false} />
-              <Tooltip {...tip} cursor={{ fill: 'rgba(212,167,73,0.08)' }} />
+              <YAxis tick={{ fontSize: 11, fill: '#8e8e93' }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <Tooltip {...tip} cursor={{ fill: 'rgba(212,167,73,0.08)' }} formatter={(v: number) => [`${v.toLocaleString()} fields`, 'Fields']} />
               <Bar dataKey="count" radius={[6, 6, 0, 0]}>
                 {byRegion.map((_, i) => (
                   <Cell key={i} fill={GOLD[i % GOLD.length]} />
@@ -130,8 +130,8 @@ export default function Analytics() {
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={waterCutDist} margin={{ left: -16 }}>
               <XAxis dataKey="band" tick={{ fontSize: 10, fill: '#8e8e93' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#8e8e93' }} axisLine={false} tickLine={false} />
-              <Tooltip {...tip} cursor={{ fill: 'rgba(212,167,73,0.08)' }} />
+              <YAxis tick={{ fontSize: 11, fill: '#8e8e93' }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <Tooltip {...tip} cursor={{ fill: 'rgba(212,167,73,0.08)' }} formatter={(v: number) => [`${v.toLocaleString()} fields`, 'Fields']} labelFormatter={(l) => `${l}% water cut`} />
               <Bar dataKey="count" radius={[6, 6, 0, 0]}>
                 {waterCutDist.map((_, i) => (
                   <Cell key={i} fill={i < 4 ? '#c8922f' : '#dfbe6e'} />
@@ -178,8 +178,18 @@ export default function Analytics() {
             <ScatterChart margin={{ left: -8, bottom: 8 }}>
               <XAxis type="number" dataKey="api" name="API" unit="°" tick={{ fontSize: 11, fill: '#8e8e93' }} axisLine={false} tickLine={false} domain={[0, 60]} label={{ value: 'API gravity (°)', position: 'insideBottom', offset: -4, fontSize: 11, fill: '#8e8e93' }} />
               <YAxis type="number" dataKey="bht" name="BHT" unit="°C" tick={{ fontSize: 11, fill: '#8e8e93' }} axisLine={false} tickLine={false} />
-              <ZAxis type="number" dataKey="oil" range={[20, 320]} />
-              <Tooltip {...tip} cursor={{ strokeDasharray: '3 3' }} formatter={(v: number, n) => [n === 'oil' ? `${v.toLocaleString()} bbl/d` : v, n]} />
+              <ZAxis type="number" dataKey="oil" name="Oil" range={[20, 320]} />
+              <Tooltip
+                {...tip}
+                cursor={{ strokeDasharray: '3 3' }}
+                formatter={(v: number, n) =>
+                  n === 'Oil'
+                    ? [`${v.toLocaleString()} bbl/d`, 'Oil production']
+                    : n === 'API'
+                      ? [`${v}°`, 'API gravity']
+                      : [`${v}°C`, 'Reservoir temp']
+                }
+              />
               <Scatter data={scatter.filter((s) => s.sweet)} fill="#c8922f" fillOpacity={0.55} />
               <Scatter data={scatter.filter((s) => !s.sweet)} fill="#c9c9ce" fillOpacity={0.45} />
             </ScatterChart>

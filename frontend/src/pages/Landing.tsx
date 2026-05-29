@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Logo } from '../components/Logo'
-import { FIELDS, REGIONS } from '../lib/fields'
+import { Globe } from '../components/Globe'
+import { FIELDS, REGIONS, type OilField } from '../lib/fields'
 import {
   IArrow,
   IBolt,
@@ -55,21 +56,58 @@ function Nav() {
   )
 }
 
+/** Smoothly tween an integer toward `target` whenever it changes. */
+function useCountUp(target: number, ms = 700) {
+  const [val, setVal] = useState(target)
+  const fromRef = useRef(target)
+  useEffect(() => {
+    const from = fromRef.current
+    const start = performance.now()
+    let raf = 0
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - start) / ms)
+      const eased = 1 - Math.pow(1 - p, 3)
+      setVal(Math.round(from + (target - from) * eased))
+      if (p < 1) raf = requestAnimationFrame(tick)
+      else fromRef.current = target
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [target, ms])
+  return val
+}
+
+function HeroBackdrop() {
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      <div className="grid-faint grid-pan absolute inset-0 [mask-image:radial-gradient(80%_70%_at_50%_30%,#000_30%,transparent_80%)]" />
+      {/* drifting gold orbs */}
+      <div className="animate-blob absolute -top-32 left-[16%] h-[420px] w-[420px] rounded-full bg-gold-200/40 blur-[120px]" />
+      <div className="animate-blob-slow absolute top-10 right-[10%] h-[360px] w-[360px] rounded-full bg-gold-300/25 blur-[130px]" />
+      {/* rotating dotted globe — the field constellation */}
+      <div className="absolute left-1/2 top-[46%] h-[min(86vw,820px)] w-[min(86vw,820px)] -translate-x-1/2 -translate-y-1/2 [mask-image:radial-gradient(closest-side,#000_72%,transparent_100%)]">
+        <Globe className="h-full w-full" />
+      </div>
+      {/* legibility scrim behind the headline */}
+      <div className="absolute inset-x-0 top-0 h-[360px] bg-[radial-gradient(58%_68%_at_50%_26%,rgba(255,255,255,0.7),rgba(255,255,255,0)_72%)]" />
+    </div>
+  )
+}
+
 function Hero() {
   return (
     <section className="relative overflow-hidden pt-32 pb-20 sm:pt-40">
-      <div className="absolute inset-0 grid-faint [mask-image:radial-gradient(70%_60%_at_50%_0%,#000_30%,transparent_75%)]" />
-      <div className="absolute -top-40 left-1/2 h-[520px] w-[820px] -translate-x-1/2 rounded-full bg-gold-200/30 blur-[120px]" />
+      <HeroBackdrop />
       <div className="container-x relative">
         <div className="mx-auto max-w-3xl text-center">
-          <span className="animate-fade-in inline-flex items-center gap-2 rounded-full border border-gold-300/60 bg-gold-50 px-3.5 py-1.5 text-xs font-semibold text-gold-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-gold-500" />
+          <span className="animate-fade-in inline-flex items-center gap-2 rounded-full border border-gold-300/60 bg-gold-50/80 px-3.5 py-1.5 text-xs font-semibold text-gold-700 backdrop-blur">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gold-500" />
             Tigbourne Capital · Oil Field Intelligence
           </span>
           <h1 className="animate-fade-up mt-6 text-[clamp(2.6rem,6vw,4.6rem)] font-semibold leading-[1.04] tracking-[-0.03em] text-ink">
             Screen every oil field
             <br />
-            on earth. <span className="text-gradient-gold">In seconds.</span>
+            on earth. <span className="text-shimmer-gold">In seconds.</span>
           </h1>
           <p className="animate-fade-up mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-ink-muted [animation-delay:80ms]">
             The only platform that pairs field-level production and reservoir data with chemical-recovery
@@ -90,37 +128,98 @@ function Hero() {
           </p>
         </div>
 
-        <HeroPreview />
+        <LiveDemo />
       </div>
     </section>
   )
 }
 
-function HeroPreview() {
-  const sample = FIELDS.filter((f) => f.oilBblPerDay && f.api && f.waterCut !== null)
-    .sort((a, b) => (b.oilBblPerDay || 0) - (a.oilBblPerDay || 0))
-    .slice(0, 6)
+interface Scenario {
+  chips: string[]
+  match: (f: OilField) => boolean
+}
+
+const SCENARIOS: Scenario[] = [
+  {
+    chips: ['Water cut ≤ 40%', 'API 16–40°', 'Offshore'],
+    match: (f) => f.waterCut != null && f.waterCut <= 40 && f.api != null && f.api >= 16 && f.api <= 40 && f.shore === 'Offshore',
+  },
+  {
+    chips: ['Onshore', 'BHT < 130°C', 'Sweet spot'],
+    match: (f) => f.shore === 'Onshore' && f.bht != null && f.bht < 130 && f.api != null && f.api >= 16 && f.api <= 40,
+  },
+  {
+    chips: ['Middle East', 'Lift < $15/bbl'],
+    match: (f) => f.region === 'Middle East' && f.liftCost != null && f.liftCost < 15,
+  },
+  {
+    chips: ['LATAM', 'Offshore', 'API ≥ 28°'],
+    match: (f) => f.region === 'LATAM' && f.shore === 'Offshore' && f.api != null && f.api >= 28,
+  },
+]
+
+function LiveDemo() {
+  const computed = useMemo(
+    () =>
+      SCENARIOS.map((s) => {
+        const matches = FIELDS.filter(s.match)
+        const rows = matches
+          .filter((f) => f.oilBblPerDay)
+          .sort((a, b) => (b.oilBblPerDay || 0) - (a.oilBblPerDay || 0))
+          .slice(0, 6)
+        return { chips: s.chips, count: matches.length, rows }
+      }),
+    [],
+  )
+
+  const [idx, setIdx] = useState(0)
+  const [paused, setPaused] = useState(false)
+  useEffect(() => {
+    if (paused) return
+    const t = setInterval(() => setIdx((i) => (i + 1) % computed.length), 3400)
+    return () => clearInterval(t)
+  }, [paused, computed.length])
+
+  const scene = computed[idx]
+  const count = useCountUp(scene.count)
+  const rows = [...scene.rows]
+  while (rows.length < 6) rows.push(null as unknown as OilField)
+
   return (
-    <div className="animate-fade-up relative mx-auto mt-16 max-w-5xl [animation-delay:260ms]">
+    <div
+      className="animate-fade-up relative mx-auto mt-16 max-w-5xl [animation-delay:260ms]"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+    >
       <div className="overflow-hidden rounded-2xl border border-black/[0.08] bg-white shadow-float">
         <div className="flex items-center gap-2 border-b border-black/[0.06] bg-[#f7f7f8] px-4 py-3">
           <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
           <span className="h-3 w-3 rounded-full bg-[#e2e2e6]" />
           <span className="h-3 w-3 rounded-full bg-[#e2e2e6]" />
           <span className="ml-3 text-xs font-medium text-ink-faint">app.tigbourne.com — Field Explorer</span>
+          <span className="ml-auto hidden items-center gap-1.5 text-[10px] font-medium text-emerald-600 sm:flex">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+            live
+          </span>
         </div>
-        <div className="grid grid-cols-[180px_1fr] text-left">
+        <div className="grid grid-cols-1 text-left sm:grid-cols-[180px_1fr]">
           <div className="hidden border-r border-black/[0.06] bg-[#fafafa] p-4 sm:block">
             <p className="px-2 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">Filters</p>
-            {['Water cut ≤ 40%', 'API 16–40°', 'BHT < 130°C', 'Offshore'].map((f) => (
-              <div key={f} className="mt-2 flex items-center gap-2 rounded-lg bg-gold-50 px-2.5 py-1.5 text-[11px] font-medium text-gold-700">
-                <span className="h-1.5 w-1.5 rounded-full bg-gold-500" />
-                {f}
-              </div>
-            ))}
+            <div key={idx} className="mt-2 space-y-2">
+              {scene.chips.map((c, i) => (
+                <div
+                  key={c}
+                  className="animate-fade-up flex items-center gap-2 rounded-lg bg-gold-50 px-2.5 py-1.5 text-[11px] font-medium text-gold-700"
+                  style={{ animationDelay: `${i * 70}ms` }}
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-gold-500" />
+                  {c}
+                </div>
+              ))}
+            </div>
             <div className="mt-4 rounded-lg border border-black/[0.06] bg-white p-3">
               <p className="text-[10px] text-ink-faint">Matching</p>
-              <p className="text-xl font-semibold text-ink">412</p>
+              <p className="text-xl font-semibold tabular-nums text-ink">{count.toLocaleString()}</p>
               <p className="text-[10px] text-ink-faint">fields</p>
             </div>
           </div>
@@ -135,19 +234,42 @@ function HeroPreview() {
                   <th className="hidden px-3 py-2 text-right font-medium sm:table-cell">API</th>
                 </tr>
               </thead>
-              <tbody>
-                {sample.map((f, i) => (
-                  <tr key={f.id} className={i % 2 ? 'bg-[#fbf7ed]/40' : ''}>
-                    <td className="px-3 py-2 font-medium text-ink">{f.oilfield}</td>
-                    <td className="px-3 py-2 text-ink-muted">{f.country}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-ink">{(f.oilBblPerDay || 0).toLocaleString()}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-ink-muted">{f.waterCut}%</td>
-                    <td className="hidden px-3 py-2 text-right tabular-nums text-ink-muted sm:table-cell">{f.api}°</td>
-                  </tr>
-                ))}
+              <tbody key={idx}>
+                {rows.map((f, i) =>
+                  f ? (
+                    <tr
+                      key={f.id}
+                      className={`animate-fade-up border-b border-black/[0.03] ${i === 0 ? 'bg-gold-50/60' : i % 2 ? 'bg-[#fbf7ed]/30' : ''}`}
+                      style={{ animationDelay: `${i * 60}ms` }}
+                    >
+                      <td className="px-3 py-2 font-medium text-ink">{f.oilfield}</td>
+                      <td className="px-3 py-2 text-ink-muted">{f.country}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-ink">{(f.oilBblPerDay || 0).toLocaleString()}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-ink-muted">{f.waterCut}%</td>
+                      <td className="hidden px-3 py-2 text-right tabular-nums text-ink-muted sm:table-cell">{f.api}°</td>
+                    </tr>
+                  ) : (
+                    <tr key={`pad-${i}`} className="border-b border-black/[0.03]">
+                      <td className="px-3 py-2" colSpan={5}>
+                        &nbsp;
+                      </td>
+                    </tr>
+                  ),
+                )}
               </tbody>
             </table>
           </div>
+        </div>
+        {/* scenario progress dots */}
+        <div className="flex items-center justify-center gap-1.5 border-t border-black/[0.06] py-2.5">
+          {computed.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setIdx(i)}
+              className={`h-1.5 rounded-full transition-all ${i === idx ? 'w-5 bg-gold-500' : 'w-1.5 bg-black/15 hover:bg-black/30'}`}
+              aria-label={`Show scenario ${i + 1}`}
+            />
+          ))}
         </div>
       </div>
       <div className="pointer-events-none absolute -bottom-6 left-1/2 h-12 w-3/4 -translate-x-1/2 rounded-full bg-gold-300/30 blur-2xl" />

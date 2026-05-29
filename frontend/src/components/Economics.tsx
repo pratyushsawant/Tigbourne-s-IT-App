@@ -13,7 +13,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { ASSUMPTIONS, fieldEconomics, SCENARIO_RANGES, usdCompact, type Scenario } from '../lib/economics'
+import { ASSUMPTIONS, fieldEconomics, SCENARIO_RANGES, usdAxis, usdCompact, type Scenario } from '../lib/economics'
 import { brentPrice, usePrices } from '../lib/prices'
 import type { OilField } from '../lib/fields'
 
@@ -29,6 +29,32 @@ const tip = {
 
 const GOLD = '#c8922f'
 const INK = '#1a1a1a'
+
+/**
+ * Y-axis scale with ~12% headroom (so curves never touch the edges) snapped to nice
+ * round bounds + ticks (so labels read $50B / $100B, not $897M / -$82M).
+ */
+function niceScale(vals: number[]): { domain: [number, number]; ticks: number[] } {
+  if (!vals.length) return { domain: [0, 1], ticks: [0, 1] }
+  let min = Math.min(...vals)
+  let max = Math.max(...vals)
+  if (min === max) {
+    min -= 1
+    max += 1
+  }
+  const pad = (max - min) * 0.12
+  let lo = min - pad
+  let hi = max + pad
+  const rough = (hi - lo) / 4 || 1
+  const mag = Math.pow(10, Math.floor(Math.log10(rough)))
+  const norm = rough / mag
+  const step = (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag
+  lo = Math.floor(lo / step) * step
+  hi = Math.ceil(hi / step) * step
+  const ticks: number[] = []
+  for (let t = lo; t <= hi + step / 2; t += step) ticks.push(t)
+  return { domain: [lo, hi], ticks }
+}
 
 const DEFAULT_SCENARIO: Required<Scenario> = {
   price: ASSUMPTIONS.basePrice,
@@ -113,6 +139,18 @@ export function Economics({ field }: { field: OilField }) {
 
   const upliftPos = eco.uplift >= 0
 
+  // Nice Y-axis scales with headroom so the lines/areas aren't clipped at the chart edges.
+  const npvScale = niceScale(eco.series.flatMap((p) => [p.baseCum, p.ceorCum]))
+  const beScale = niceScale(eco.sweep.flatMap((p) => [p.base, p.ceor]))
+  const ivScale = niceScale(eco.intervention.map((p) => p.npv))
+
+  // When a break-even has no zero-crossing in the $10–130 sweep, say which side.
+  const beLabel = (be: number | null, key: 'base' | 'ceor') => {
+    if (be != null) return `$${be}/bbl`
+    const lowest = eco.sweep[0]?.[key] ?? 0
+    return lowest > 0 ? '< $10/bbl' : '> $130/bbl'
+  }
+
   return (
     <div className="space-y-6">
       {/* Scenario controls */}
@@ -183,7 +221,7 @@ export function Economics({ field }: { field: OilField }) {
         </p>
         <div className="mt-5 h-72">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={eco.series} margin={{ left: 4, right: 8, top: 8 }}>
+            <ComposedChart data={eco.series} margin={{ left: 4, right: 8, top: 18, bottom: 12 }}>
               <defs>
                 <linearGradient id="ceorFill" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={GOLD} stopOpacity={0.22} />
@@ -193,17 +231,20 @@ export function Economics({ field }: { field: OilField }) {
               <CartesianGrid stroke="rgba(0,0,0,0.05)" vertical={false} />
               <XAxis
                 dataKey="year"
+                height={44}
                 tick={{ fontSize: 11, fill: '#8e8e93' }}
                 axisLine={false}
                 tickLine={false}
-                label={{ value: 'Year', position: 'insideBottom', offset: -2, fontSize: 11, fill: '#8e8e93' }}
+                label={{ value: 'Year', position: 'insideBottom', offset: 0, fontSize: 11, fill: '#8e8e93' }}
               />
               <YAxis
+                domain={npvScale.domain}
+                ticks={npvScale.ticks}
                 tick={{ fontSize: 11, fill: '#8e8e93' }}
                 axisLine={false}
                 tickLine={false}
-                width={56}
-                tickFormatter={(v) => usdCompact(v)}
+                width={70}
+                tickFormatter={(v) => usdAxis(v)}
               />
               <Tooltip {...tip} formatter={(v: number, n) => [usdCompact(v), n === 'ceorCum' ? 'With CEOR' : 'Without CEOR']} labelFormatter={(l) => `Year ${l}`} />
               <ReferenceLine y={0} stroke="rgba(0,0,0,0.25)" strokeDasharray="3 3" />
@@ -229,35 +270,38 @@ export function Economics({ field }: { field: OilField }) {
           line marks your scenario price of ${scenario.price}/bbl.
         </p>
         <div className="mt-4 flex flex-wrap gap-3">
-          <Stat label="Break-even — no CEOR" value={eco.breakEvenBase != null ? `$${eco.breakEvenBase}/bbl` : '—'} />
-          <Stat label="Break-even — with CEOR" value={eco.breakEvenCeor != null ? `$${eco.breakEvenCeor}/bbl` : '—'} accent="gold" />
+          <Stat label="Break-even — no CEOR" value={beLabel(eco.breakEvenBase, 'base')} />
+          <Stat label="Break-even — with CEOR" value={beLabel(eco.breakEvenCeor, 'ceor')} accent="gold" />
           {eco.crossover != null && <Stat label="CEOR wins above" value={`$${eco.crossover}/bbl`} accent="pos" />}
         </div>
         <div className="mt-5 h-72">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={eco.sweep} margin={{ left: 4, right: 8, top: 8 }}>
+            <ComposedChart data={eco.sweep} margin={{ left: 4, right: 8, top: 18, bottom: 12 }}>
               <CartesianGrid stroke="rgba(0,0,0,0.05)" vertical={false} />
               <XAxis
                 dataKey="price"
                 type="number"
+                height={44}
                 domain={[10, 130]}
                 ticks={[10, 30, 50, 70, 90, 110, 130]}
                 tick={{ fontSize: 11, fill: '#8e8e93' }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(v) => `$${v}`}
-                label={{ value: 'Oil price ($/bbl)', position: 'insideBottom', offset: -2, fontSize: 11, fill: '#8e8e93' }}
+                label={{ value: 'Oil price ($/bbl)', position: 'insideBottom', offset: 0, fontSize: 11, fill: '#8e8e93' }}
               />
               <YAxis
+                domain={beScale.domain}
+                ticks={beScale.ticks}
                 tick={{ fontSize: 11, fill: '#8e8e93' }}
                 axisLine={false}
                 tickLine={false}
-                width={56}
-                tickFormatter={(v) => usdCompact(v)}
+                width={70}
+                tickFormatter={(v) => usdAxis(v)}
               />
               <Tooltip {...tip} formatter={(v: number, n) => [usdCompact(v), n === 'ceor' ? 'With CEOR' : 'Without CEOR']} labelFormatter={(l) => `$${l}/bbl`} />
               <ReferenceLine y={0} stroke="rgba(0,0,0,0.35)" />
-              <ReferenceLine x={scenario.price} stroke="#b07523" strokeDasharray="4 4" label={{ value: 'Scenario', fontSize: 10, fill: '#b07523', position: 'top' }} />
+              <ReferenceLine x={scenario.price} stroke="#b07523" strokeDasharray="4 4" label={{ value: 'Scenario', fontSize: 10, fill: '#b07523', position: 'insideTopRight', offset: 6 }} />
               <Line type="monotone" dataKey="base" name="Without CEOR" stroke={INK} strokeWidth={2} dot={false} />
               <Line type="monotone" dataKey="ceor" name="With CEOR" stroke={GOLD} strokeWidth={2.5} dot={false} />
               {eco.breakEvenBase != null && <ReferenceDot x={eco.breakEvenBase} y={0} r={4} fill={INK} stroke="#fff" strokeWidth={1.5} />}
@@ -291,7 +335,7 @@ export function Economics({ field }: { field: OilField }) {
         )}
         <div className="mt-5 h-72">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={eco.intervention} margin={{ left: 4, right: 8, top: 8 }}>
+            <ComposedChart data={eco.intervention} margin={{ left: 4, right: 8, top: 18, bottom: 12 }}>
               <defs>
                 <linearGradient id="wcFill" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={GOLD} stopOpacity={0.85} />
@@ -301,16 +345,17 @@ export function Economics({ field }: { field: OilField }) {
               <CartesianGrid stroke="rgba(0,0,0,0.05)" vertical={false} />
               <XAxis
                 dataKey="waterCut"
+                height={44}
                 tick={{ fontSize: 11, fill: '#8e8e93' }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(v) => `${v}%`}
-                label={{ value: 'Water cut at intervention', position: 'insideBottom', offset: -2, fontSize: 11, fill: '#8e8e93' }}
+                label={{ value: 'Water cut at intervention', position: 'insideBottom', offset: 0, fontSize: 11, fill: '#8e8e93' }}
               />
-              <YAxis tick={{ fontSize: 11, fill: '#8e8e93' }} axisLine={false} tickLine={false} width={56} tickFormatter={(v) => usdCompact(v)} />
+              <YAxis domain={ivScale.domain} ticks={ivScale.ticks} tick={{ fontSize: 11, fill: '#8e8e93' }} axisLine={false} tickLine={false} width={70} tickFormatter={(v) => usdAxis(v)} />
               <Tooltip {...tip} formatter={(v: number) => [usdCompact(v), 'Incremental NPV']} labelFormatter={(l) => `Intervene at ${l}% water cut`} cursor={{ fill: 'rgba(212,167,73,0.08)' }} />
               {eco.currentWaterCut != null && (
-                <ReferenceLine x={Math.round(eco.currentWaterCut / 10) * 10} stroke="#b07523" strokeDasharray="4 4" label={{ value: 'Today', fontSize: 10, fill: '#b07523', position: 'top' }} />
+                <ReferenceLine x={Math.round(eco.currentWaterCut / 10) * 10} stroke="#b07523" strokeDasharray="4 4" label={{ value: 'Today', fontSize: 10, fill: '#b07523', position: 'insideTopRight', offset: 6 }} />
               )}
               <Bar dataKey="npv" radius={[5, 5, 0, 0]}>
                 {eco.intervention.map((p) => (

@@ -29,6 +29,15 @@
     background-clip: text;
     -webkit-text-fill-color: transparent;
   }
+  /* Animated gold sheen for hero accent text */
+  .text-shimmer-gold {
+    background: linear-gradient(100deg, #b07523 0%, #d4a749 28%, #f3dd9a 50%, #d4a749 72%, #b07523 100%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer 5s linear infinite;
+  }
   .btn-gold {
     @apply inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-b from-gold-400 to-gold-600 px-6 py-3 text-sm font-semibold text-white shadow-gold transition-all duration-300 hover:from-gold-300 hover:to-gold-500 hover:shadow-float active:scale-[0.98];
   }
@@ -93,4 +102,26 @@
     linear-gradient(to right, rgba(0,0,0,0.035) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(0,0,0,0.035) 1px, transparent 1px);
   background-size: 56px 56px;
+}
+/* Slow drift of the hero grid */
+@keyframes grid-pan {
+  from { background-position: 0 0; }
+  to { background-position: 56px 56px; }
+}
+.grid-pan { animation: grid-pan 24s linear infinite; }
+
+/* Radar sweep wedge used behind the hero */
+.radar-sweep {
+  background: conic-gradient(from 0deg, rgba(212,167,73,0.16), rgba(212,167,73,0) 22%, rgba(212,167,73,0) 100%);
+}
+
+/* Respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

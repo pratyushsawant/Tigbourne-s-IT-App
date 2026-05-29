@@ -376,12 +376,24 @@ export function quickUplift(f: OilField): number {
   return ceor - base
 }
 
-/** Compact USD: $1.2B / $340M / $12M / $900k */
+/** Compact USD for labels/tooltips: $1.05T / $1.2B / $340M / $12M / $900k */
 export function usdCompact(v: number): string {
   const sign = v < 0 ? '-' : ''
   const a = Math.abs(v)
+  if (a >= 1e12) return `${sign}$${(a / 1e12).toFixed(2)}T`
   if (a >= 1e9) return `${sign}$${(a / 1e9).toFixed(2)}B`
   if (a >= 1e6) return `${sign}$${(a / 1e6).toFixed(1)}M`
   if (a >= 1e3) return `${sign}$${(a / 1e3).toFixed(0)}k`
   return `${sign}$${a.toFixed(0)}`
+}
+
+/** Shorter USD for chart axis ticks (fewer decimals so labels never overflow). */
+export function usdAxis(v: number): string {
+  const sign = v < 0 ? '-' : ''
+  const a = Math.abs(v)
+  if (a >= 1e12) return `${sign}$${(a / 1e12).toFixed(1)}T`
+  if (a >= 1e9) return `${sign}$${(a / 1e9).toFixed(0)}B`
+  if (a >= 1e6) return `${sign}$${(a / 1e6).toFixed(0)}M`
+  if (a >= 1e3) return `${sign}$${(a / 1e3).toFixed(0)}k`
+  return `${sign}$${Math.round(a)}`
 }
