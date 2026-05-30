@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { apiGet } from './api'
 
 export interface Quote {
   symbol: string
@@ -37,7 +38,24 @@ let inflight: Promise<PriceState | null> | null = null
  * clearly labelled. The intended production source is the backend `/prices/forward-curve`
  * endpoint, which this hook can point at by changing the URL below.
  */
+/** Server-side feed via the backend (avoids browser CORS); preferred when the API is wired. */
+async function fetchFromApi(): Promise<PriceState | null> {
+  const data = await apiGet<{ quotes: { symbol: string; name?: string; price: number; change?: number }[]; live: boolean; asOf: string }>(
+    '/api/prices/forward-curve',
+  )
+  if (!data || !Array.isArray(data.quotes) || !data.quotes.length) return null
+  const quotes: Quote[] = data.quotes.map((q) => ({
+    symbol: q.symbol,
+    label: q.name || q.symbol,
+    price: Math.round(q.price * 100) / 100,
+    change: Math.round((q.change ?? 0) * 100) / 100,
+  }))
+  return { quotes, live: data.live, asOf: data.asOf || 'today' }
+}
+
 async function fetchLive(): Promise<PriceState | null> {
+  const fromApi = await fetchFromApi()
+  if (fromApi) return fromApi
   try {
     const url = 'https://stooq.com/q/l/?s=cb.f+cl.f&f=sd2t2oc&h&e=csv'
     const res = await fetch(url)

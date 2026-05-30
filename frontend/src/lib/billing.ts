@@ -1,4 +1,5 @@
 import { TIER_META, type Tier } from '../context/AuthContext'
+import { apiPost } from './api'
 
 /**
  * Billing entrypoints. Real payments require the backend (Stripe secret key + webhooks),
@@ -21,18 +22,8 @@ const STUB_MESSAGE =
   'Checkout is wired and ready for Stripe — the backend billing endpoint just isn’t live in this demo build yet. In production this opens Stripe Checkout.'
 
 async function post(path: string, body?: unknown): Promise<string | null> {
-  try {
-    const res = await fetch(path, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: body ? JSON.stringify(body) : undefined,
-    })
-    if (!res.ok) return null
-    const data = (await res.json()) as { url?: string }
-    return data.url ?? null
-  } catch {
-    return null
-  }
+  const res = await apiPost<{ url?: string }>(path, body)
+  return res.ok ? (res.data?.url ?? null) : null
 }
 
 /** Begin a subscription. Self-serve tiers → Stripe Checkout; Enterprise → Contact Sales. */

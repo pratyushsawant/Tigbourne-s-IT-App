@@ -1,14 +1,12 @@
 import raw from '../data/integrity.json'
 import { FIELDS } from './fields'
 
-interface RawIntegrity {
+export interface RawIntegrity {
   auditHeaders: string[]
   audit: (string | number)[][]
   mismatchHeaders: string[]
   mismatches: (string | number)[][]
 }
-
-const data = raw as RawIntegrity
 
 export interface AuditEntry {
   n: number | string
@@ -33,41 +31,65 @@ export interface Mismatch {
   diffPct: number
 }
 
-export const AUDIT: AuditEntry[] = data.audit.map((r) => ({
-  n: r[0],
-  sheet: String(r[1]),
-  range: String(r[2]),
-  type: String(r[3]),
-  what: String(r[4]),
-  why: String(r[5]),
-  date: String(r[6]),
-}))
-
-export const MISMATCHES: Mismatch[] = data.mismatches
-  .map((r) => ({
-    sheet: String(r[0]),
-    row: r[1],
-    country: String(r[2]),
-    field: String(r[3]),
-    reported: Number(r[4]) || 0,
-    wells: Number(r[5]) || 0,
-    perWell: Number(r[6]) || 0,
-    expected: Number(r[7]) || 0,
-    diff: Number(r[8]) || 0,
-    // Source column is Diff ÷ Expected (a ratio: 1.0 = 100%). Convert to a true percentage.
-    diffPct: (Number(r[9]) || 0) * 100,
+function parseAudit(d: RawIntegrity): AuditEntry[] {
+  return (d.audit || []).map((r) => ({
+    n: r[0],
+    sheet: String(r[1]),
+    range: String(r[2]),
+    type: String(r[3]),
+    what: String(r[4]),
+    why: String(r[5]),
+    date: String(r[6]),
   }))
-  .sort((a, b) => b.diffPct - a.diffPct)
+}
+
+function parseMismatches(d: RawIntegrity): Mismatch[] {
+  return (d.mismatches || [])
+    .map((r) => ({
+      sheet: String(r[0]),
+      row: r[1],
+      country: String(r[2]),
+      field: String(r[3]),
+      reported: Number(r[4]) || 0,
+      wells: Number(r[5]) || 0,
+      perWell: Number(r[6]) || 0,
+      expected: Number(r[7]) || 0,
+      // Source column is Diff ÷ Expected (a ratio: 1.0 = 100%). Convert to a true percentage.
+      diffPct: (Number(r[9]) || 0) * 100,
+      diff: Number(r[8]) || 0,
+    }))
+    .sort((a, b) => b.diffPct - a.diffPct)
+}
+
+export let AUDIT: AuditEntry[] = parseAudit(raw as RawIntegrity)
+export let MISMATCHES: Mismatch[] = parseMismatches(raw as RawIntegrity)
 
 /** Share of fields that carry a P&A figure (completeness metric). */
 export function paCoverage() {
   const withPa = FIELDS.filter((f) => f.pa != null && f.pa > 0).length
-  return { withPa, total: FIELDS.length, pct: Math.round((withPa / FIELDS.length) * 1000) / 10 }
+  const total = FIELDS.length || 1
+  return { withPa, total: FIELDS.length, pct: Math.round((withPa / total) * 1000) / 10 }
 }
 
-export const INTEGRITY_SUMMARY = {
-  validated: FIELDS.length,
-  flagged: MISMATCHES.length,
-  auditEntries: AUDIT.length,
-  severe: MISMATCHES.filter((m) => m.diffPct >= 100).length, // reported ≥2× the expected E×F
+function summary() {
+  return {
+    validated: FIELDS.length,
+    flagged: MISMATCHES.length,
+    auditEntries: AUDIT.length,
+    severe: MISMATCHES.filter((m) => m.diffPct >= 100).length, // reported ≥2× the expected E×F
+  }
+}
+
+export let INTEGRITY_SUMMARY = summary()
+
+/** Swap in integrity data fetched from the API (called once at startup, before render). */
+export function applyIntegrity(d: RawIntegrity): void {
+  AUDIT = parseAudit(d)
+  MISMATCHES = parseMismatches(d)
+  INTEGRITY_SUMMARY = summary()
+}
+
+/** Recompute the summary after the live field count is known (FIELDS was swapped). */
+export function refreshIntegritySummary(): void {
+  INTEGRITY_SUMMARY = summary()
 }

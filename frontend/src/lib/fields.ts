@@ -28,7 +28,9 @@ export interface OilField {
   pa: number | null // plug & abandonment cost estimate ($, field total)
 }
 
-export const FIELDS: OilField[] = raw as OilField[]
+// `let` (not const) so the API bootstrap in main.tsx can swap in live data before
+// the app renders. ES module live-bindings make the new value visible to all importers.
+export let FIELDS: OilField[] = raw as OilField[]
 
 /** Column / parameter metadata — drives the grid, filters and detail view. */
 export type Unit = '' | 'bbl/d' | '%' | '$/bbl' | '°C' | 'ppm' | '°API' | 'ft' | '$' | 'md' | '/yr'
@@ -93,13 +95,12 @@ export function fmt(col: ColumnDef, value: unknown): string {
   return Number.isInteger(n) ? n.toLocaleString() : n.toLocaleString(undefined, { maximumFractionDigits: 2 })
 }
 
-export const REGIONS = Array.from(new Set(FIELDS.map((f) => f.region))).sort()
 export const SHORES = ['Onshore', 'Offshore']
 
-function range(key: keyof OilField): [number, number] {
+function computeRange(fields: OilField[], key: keyof OilField): [number, number] {
   let lo = Infinity
   let hi = -Infinity
-  for (const f of FIELDS) {
+  for (const f of fields) {
     const v = f[key]
     if (typeof v === 'number' && !Number.isNaN(v)) {
       if (v < lo) lo = v
@@ -109,6 +110,29 @@ function range(key: keyof OilField): [number, number] {
   return [lo === Infinity ? 0 : lo, hi === -Infinity ? 0 : hi]
 }
 
-export const RANGES: Record<string, [number, number]> = Object.fromEntries(
-  COLUMNS.filter((c) => c.filterable && c.numeric).map((c) => [c.key, range(c.key)]),
+export function computeRanges(fields: OilField[]): Record<string, [number, number]> {
+  return Object.fromEntries(
+    COLUMNS.filter((c) => c.filterable && c.numeric).map((c) => [c.key, computeRange(fields, c.key)]),
+  )
+}
+
+export function computeRegions(fields: OilField[]): string[] {
+  return Array.from(new Set(fields.map((f) => f.region))).sort()
+}
+
+export let REGIONS = computeRegions(FIELDS)
+
+/** Swap in a dataset fetched from the API (called once at startup, before render). */
+export function applyDataset(
+  fields: OilField[],
+  ranges?: Record<string, [number, number]>,
+  regions?: string[],
+): void {
+  FIELDS = fields
+  RANGES = ranges && Object.keys(ranges).length ? ranges : computeRanges(fields)
+  REGIONS = regions && regions.length ? regions : computeRegions(fields)
+}
+
+export let RANGES: Record<string, [number, number]> = Object.fromEntries(
+  COLUMNS.filter((c) => c.filterable && c.numeric).map((c) => [c.key, computeRange(FIELDS, c.key)]),
 )

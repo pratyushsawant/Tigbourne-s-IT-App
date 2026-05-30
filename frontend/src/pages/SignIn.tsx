@@ -10,7 +10,7 @@ const COUNTRIES = new Set(FIELDS.map((f) => f.country)).size
 
 export default function SignIn() {
   useDocumentTitle('Sign in')
-  const { signIn } = useAuth()
+  const { signIn, login, register } = useAuth()
   const nav = useNavigate()
   const loc = useLocation()
   const from = (loc.state as { from?: string })?.from || '/app'
@@ -22,17 +22,21 @@ export default function SignIn() {
   const [org, setOrg] = useState('')
   const [tier, setTier] = useState<Tier>('Enterprise')
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  function submit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault()
     if (!email) return
+    setError('')
     setLoading(true)
-    // Mock auth — any credentials are accepted for this front-end build.
-    setTimeout(() => {
-      if (mode === 'signup') signIn(email, { name: name || undefined, org: org || undefined, tier })
-      else signIn(email)
-      nav(from, { replace: true })
-    }, 650)
+    // Uses the real API when VITE_API_BASE is set; falls back to mock auth otherwise.
+    const res =
+      mode === 'signup'
+        ? await register({ email, password, name: name || undefined, org: org || undefined, tier })
+        : await login(email, password)
+    setLoading(false)
+    if (res.ok) nav(from, { replace: true })
+    else setError(res.error || 'Something went wrong. Please try again.')
   }
 
   function demo() {
@@ -180,6 +184,10 @@ export default function SignIn() {
                   ))}
                 </div>
               </div>
+            )}
+
+            {error && (
+              <p className="rounded-lg bg-rose-50 px-3 py-2 text-center text-xs font-medium text-rose-600">{error}</p>
             )}
 
             <button type="submit" disabled={loading} className="btn-gold w-full !py-3.5 disabled:opacity-70">

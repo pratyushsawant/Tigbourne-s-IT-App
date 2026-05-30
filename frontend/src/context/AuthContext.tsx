@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { apiEnabled, apiGet, apiPost, setToken } from '../lib/api'
 
 export type Tier = 'Individual' | 'Institutional' | 'Enterprise'
 export type Permission = 'economics' | 'export' | 'dataIntegrity'
@@ -73,12 +74,31 @@ export function tierCan(tier: Tier, p: Permission): boolean {
   return PERMISSIONS[tier].includes(p)
 }
 
+export interface AuthResult {
+  ok: boolean
+  error?: string
+}
+export interface RegisterPayload {
+  email: string
+  password: string
+  name?: string
+  org?: string
+  tier?: Tier
+}
+
 interface AuthState {
   user: User | null
   signIn: (email: string, opts?: Partial<User>) => void
+  login: (email: string, password: string) => Promise<AuthResult>
+  register: (payload: RegisterPayload) => Promise<AuthResult>
   signOut: () => void
   updateUser: (partial: Partial<User>) => void
   can: (p: Permission) => boolean
+}
+
+interface TokenResponse {
+  access_token: string
+  user: { email: string; name: string; org: string; tier: Tier }
 }
 
 const AuthContext = createContext<AuthState | null>(null)
@@ -121,8 +141,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(KEY, JSON.stringify(u))
   }
 
+  // If a JWT is present (real backend), hydrate the user from /api/auth/me on load.
+  useEffect(() => {
+    if (!apiEnabled) return
+    apiGet<TokenResponse['user']>('/api/auth/me').then((me) => {
+      if (me) {
+        setUser(me)
+        localStorage.setItem(KEY, JSON.stringify(me))
+      }
+    })
+  }, [])
+
+  function persist(u: User) {
+    setUser(u)
+    localStorage.setItem(KEY, JSON.stringify(u))
+  }
+
+  const login: AuthState['login'] = async (email, password) => {
+    if (apiEnabled) {
+      const res = await apiPost<TokenResponse>('/api/auth/login', { email, password })
+      if (res.ok && res.data) {
+        setToken(res.data.access_token)
+        persist(res.data.user)
+        return { ok: true }
+      }
+      if (res.status === 401) return { ok: false, error: 'Invalid email or password' }
+      // status 0 → backend unreachable: fall through to mock so the demo still works.
+    }
+    signIn(email)
+    return { ok: true }
+  }
+
+  const register: AuthState['register'] = async (payload) => {
+    if (apiEnabled) {
+      const res = await apiPost<TokenResponse>('/api/auth/signup', payload)
+      if (res.ok && res.data) {
+        setToken(res.data.access_token)
+        persist(res.data.user)
+        return { ok: true }
+      }
+      if (res.status === 409) return { ok: false, error: 'That email is already registered' }
+      if (res.status && res.status >= 400 && res.status < 500) return { ok: false, error: 'Could not create account' }
+    }
+    signIn(payload.email, { name: payload.name, org: payload.org, tier: payload.tier })
+    return { ok: true }
+  }
+
   const signOut = () => {
     setUser(null)
+    setToken(null)
     localStorage.removeItem(KEY)
   }
 
@@ -138,7 +205,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const can = (p: Permission) => (user ? tierCan(user.tier, p) : false)
 
   return (
-    <AuthContext.Provider value={{ user, signIn, signOut, updateUser, can }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ user, signIn, login, register, signOut, updateUser, can }}>
+      {children}
+    </AuthContext.Provider>
   )
 }
 
