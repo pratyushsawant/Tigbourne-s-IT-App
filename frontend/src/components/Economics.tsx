@@ -365,21 +365,33 @@ export function Economics({ field }: { field: OilField }) {
                     : 'bg-rose-100 text-rose-700'
               }`}
             >
-              {eco.drillVsCeor.recommend === 'Neither' ? 'Neither pays back' : `Recommend: ${eco.drillVsCeor.recommend}`}
+              {!eco.drillVsCeor.ceorViable
+                ? 'Past CEOR window'
+                : eco.drillVsCeor.recommend === 'Neither'
+                  ? 'Neither pays back'
+                  : `Recommend: ${eco.drillVsCeor.recommend}`}
             </span>
           </div>
 
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
-            {eco.drillVsCeor.multiplier && (
-              <span className="rounded-full bg-gold-50 px-2.5 py-1 font-medium text-gold-700">
-                Chemicals cost ≈{eco.drillVsCeor.multiplier}× less than drilling this oil
+            {!eco.drillVsCeor.ceorViable ? (
+              <span className="rounded-full bg-rose-50 px-2.5 py-1 font-medium text-rose-600">
+                Water cut too high — most mobile oil is already swept, so a chemical flood adds little
               </span>
+            ) : (
+              <>
+                {eco.drillVsCeor.multiplier && (
+                  <span className="rounded-full bg-gold-50 px-2.5 py-1 font-medium text-gold-700">
+                    Chemicals cost ≈{eco.drillVsCeor.multiplier}× less than drilling this oil
+                  </span>
+                )}
+                <span className="rounded-full bg-black/[0.04] px-2.5 py-1 font-medium text-ink-soft">
+                  {eco.drillVsCeor.crossoverWaterCut != null
+                    ? `CEOR stays ahead up to ~${eco.drillVsCeor.crossoverWaterCut}% water cut`
+                    : 'CEOR wins at every water cut'}
+                </span>
+              </>
             )}
-            <span className="rounded-full bg-black/[0.04] px-2.5 py-1 font-medium text-ink-soft">
-              {eco.drillVsCeor.crossoverWaterCut != null
-                ? `CEOR stays ahead up to ~${eco.drillVsCeor.crossoverWaterCut}% water cut`
-                : 'CEOR wins at every water cut'}
-            </span>
           </div>
 
           <div className="mt-5 grid gap-4 sm:grid-cols-2">

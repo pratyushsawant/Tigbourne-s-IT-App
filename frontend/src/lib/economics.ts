@@ -100,6 +100,7 @@ export interface DrillVsCeor {
   ceor: { capex: number; npv: number; perBbl: number }
   drill: { wells: number; capex: number; npv: number; perBbl: number } | null
   recommend: 'CEOR' | 'Drill' | 'Neither'
+  ceorViable: boolean // false when water cut is past the CEOR window (uplift negligible)
   multiplier: number | null // drill$ ÷ CEOR$ cost ratio (Buddy's "multiplier")
   // Buddy DASH-RESULT crossover view: CEOR vs drill NPV swept across water cut.
   curve: { waterCut: number; ceor: number; drill: number }[]
@@ -145,10 +146,14 @@ function reservoirScore(f: OilField): number {
   return apiScore * tempScore
 }
 
-/** Water-cut component — value of intervening is highest early (low water cut). */
+/** Water-cut component — value of intervening is highest early; tapers to ~0 once the field is
+ * nearly all water (CEOR can't recover oil that's already been swept). */
 function waterScore(waterCutPct: number): number {
-  return clamp((95 - waterCutPct) / 80, 0.15, 1)
+  return clamp((95 - waterCutPct) / 80, 0.02, 1)
 }
+
+/** Below this CEOR suitability the chemical-recovery window has effectively closed (too watered-out). */
+export const CEOR_VIABILITY_MIN = 0.12
 
 /** How effective a chemical-recovery program is on this field, 0 (no point) – 1 (ideal). */
 export function suitabilityFactor(f: OilField): number {
@@ -368,7 +373,12 @@ function computeDrillVsCeor(f: OilField, s: number, A: Assumptions): DrillVsCeor
   }
 
   const best = Math.max(ceorNpv, drill ? drill.npv : -Infinity)
-  const recommend: DrillVsCeor['recommend'] = best <= 0 ? 'Neither' : drill && drill.npv > ceorNpv ? 'Drill' : 'CEOR'
+  // Past the CEOR window (very high water cut → negligible uplift), chemicals aren't a real option
+  // even if they'd be "cheaper" than drilling the marginal oil — so don't recommend CEOR.
+  let recommend: DrillVsCeor['recommend']
+  if (s < CEOR_VIABILITY_MIN) recommend = drill && drill.npv > 0 ? 'Drill' : 'Neither'
+  else if (best <= 0) recommend = 'Neither'
+  else recommend = drill && drill.npv > ceorNpv ? 'Drill' : 'CEOR'
   // "Chemicals are X× cheaper" — drilling capex vs. the total CEOR program cost (chem PV + infra).
   const ceorProgramCost = ceorInfra + chemPV
   const multiplier = drill && ceorProgramCost > 0 ? Math.round((drill.capex / ceorProgramCost) * 10) / 10 : null
@@ -386,7 +396,7 @@ function computeDrillVsCeor(f: OilField, s: number, A: Assumptions): DrillVsCeor
     if (crossoverWaterCut === null && canDrill && drillW > ceorW) crossoverWaterCut = w
   }
 
-  return { incrementalBopd: peakInc, ceor, drill, recommend, multiplier, curve, crossoverWaterCut }
+  return { incrementalBopd: peakInc, ceor, drill, recommend, ceorViable: s >= CEOR_VIABILITY_MIN, multiplier, curve, crossoverWaterCut }
 }
 
 export function fieldEconomics(f: OilField, scenario: Scenario = {}): FieldEconomics {

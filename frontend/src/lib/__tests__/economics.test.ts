@@ -131,6 +131,16 @@ describe('fieldEconomics', () => {
     expect(d.ceor.npv).toBeGreaterThan(d.drill!.npv)
   })
 
+  it('does not recommend CEOR once water cut is past the viable window (Shengli-like, 93%)', () => {
+    const f = makeField({
+      oilBblPerDay: 85_000, numWells: 620, bblPerWell: 137, waterCut: 93,
+      api: 31, bht: 88, liftCost: 26, drillCost: 5_500_000, declinePct: 9,
+    })
+    const d = fieldEconomics(f).drillVsCeor!
+    expect(d.ceorViable).toBe(false)
+    expect(d.recommend).not.toBe('CEOR')
+  })
+
   it('both strategies are valued on the same incremental oil (CEOR beats drill only by avoiding capex)', () => {
     // On the identical stream, CEOR pays chem opex, drilling pays capex; the gap equals
     // drilling capex minus the chem PV — never the artifact of comparing different streams.
