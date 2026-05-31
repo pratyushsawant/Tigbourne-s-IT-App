@@ -13,7 +13,7 @@ import {
   YAxis,
 } from 'recharts'
 import { ASSUMPTIONS, fieldEconomics, SCENARIO_RANGES, usdAxis, usdCompact, type Scenario } from '../lib/economics'
-import { brentPrice, usePrices } from '../lib/prices'
+import { benchmarkPrice, usePrices, type Benchmark } from '../lib/prices'
 import type { OilField } from '../lib/fields'
 
 const tip = {
@@ -106,14 +106,15 @@ function ScenarioSlider({
 
 export function Economics({ field }: { field: OilField }) {
   const prices = usePrices()
-  const [scenario, setScenario] = useState<Required<Scenario>>(() => ({ ...DEFAULT_SCENARIO, price: Math.round(brentPrice()) }))
+  const [benchmark, setBenchmark] = useState<Benchmark>('BRENT')
+  const [scenario, setScenario] = useState<Required<Scenario>>(() => ({ ...DEFAULT_SCENARIO, price: Math.round(benchmarkPrice(undefined, 'BRENT')) }))
   const [priceTouched, setPriceTouched] = useState(false)
   const eco = useMemo(() => fieldEconomics(field, scenario), [field, scenario])
 
-  // Default the scenario oil price to live Brent once the feed responds (unless the analyst overrode it).
+  // Drive the scenario price from the chosen live benchmark (unless the analyst set it by hand).
   useEffect(() => {
-    if (prices.live && !priceTouched) setScenario((s) => ({ ...s, price: Math.round(brentPrice(prices)) }))
-  }, [prices.live, priceTouched]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!priceTouched) setScenario((s) => ({ ...s, price: Math.round(benchmarkPrice(prices, benchmark)) }))
+  }, [prices.live, benchmark, priceTouched]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (k: keyof Scenario) => (v: number) => {
     if (k === 'price') setPriceTouched(true)
@@ -121,7 +122,7 @@ export function Economics({ field }: { field: OilField }) {
   }
   const resetScenario = () => {
     setPriceTouched(false)
-    setScenario({ ...DEFAULT_SCENARIO, price: Math.round(brentPrice(prices)) })
+    setScenario({ ...DEFAULT_SCENARIO, price: Math.round(benchmarkPrice(prices, benchmark)) })
   }
   const dirty =
     priceTouched ||
@@ -150,14 +151,30 @@ export function Economics({ field }: { field: OilField }) {
           <div>
             <h2 className="text-sm font-semibold uppercase tracking-wider text-gold-700">Scenario inputs</h2>
             <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-ink-muted">
-              Adjust the assumptions — everything below updates live.
+              Adjust the assumptions — everything below updates live. Benchmark:
+              <span className="inline-flex overflow-hidden rounded-full border border-gold-300">
+                {(['BRENT', 'WTI', 'DUBAI'] as Benchmark[]).map((b) => (
+                  <button
+                    key={b}
+                    onClick={() => {
+                      setBenchmark(b)
+                      setPriceTouched(false)
+                    }}
+                    className={`px-2 py-0.5 text-[10px] font-semibold transition ${
+                      benchmark === b ? 'bg-gold-500 text-white' : 'bg-white text-gold-700 hover:bg-gold-50'
+                    }`}
+                  >
+                    {b === 'DUBAI' ? 'Dubai' : b === 'WTI' ? 'WTI' : 'Brent'}
+                  </button>
+                ))}
+              </span>
               <span
                 className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                   prices.live ? 'bg-emerald-100 text-emerald-700' : 'bg-black/[0.05] text-ink-muted'
                 }`}
               >
                 <span className={`h-1.5 w-1.5 rounded-full ${prices.live ? 'bg-emerald-500' : 'bg-ink-faint'}`} />
-                Brent ${brentPrice(prices)} · {prices.live ? 'live' : 'reference'}
+                ${Math.round(benchmarkPrice(prices, benchmark))} · {prices.live ? 'live' : 'reference'}
               </span>
             </p>
           </div>

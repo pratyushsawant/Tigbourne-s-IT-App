@@ -23,10 +23,18 @@ export const REFERENCE_PRICES: Quote[] = [
 
 const FALLBACK: PriceState = { quotes: REFERENCE_PRICES, live: false, asOf: 'reference' }
 
+export type Benchmark = 'BRENT' | 'WTI' | 'DUBAI'
+
 /** The price the economics engine defaults its scenario to (updated when a live feed loads). */
 export function brentPrice(state?: PriceState): number {
   const q = (state?.quotes ?? REFERENCE_PRICES).find((x) => x.symbol === 'BRENT')
   return q?.price ?? 75
+}
+
+/** Live price for a chosen benchmark (Brent / WTI / Dubai), feeding the economics calculations. */
+export function benchmarkPrice(state: PriceState | undefined, symbol: Benchmark): number {
+  const q = (state?.quotes ?? REFERENCE_PRICES).find((x) => x.symbol === symbol)
+  return q?.price ?? brentPrice(state)
 }
 
 let cache: PriceState | null = null

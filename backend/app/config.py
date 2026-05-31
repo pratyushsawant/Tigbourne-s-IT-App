@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     frontend_base_url: str = "http://localhost:5173"
 
     price_api_url: Optional[str] = None
+    dubai_differential: float = 2.0  # Dubai ≈ Brent − this $/bbl (no free Dubai feed)
 
     @property
     def cors_list(self) -> list[str]:
