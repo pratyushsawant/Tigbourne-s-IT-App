@@ -61,6 +61,23 @@ function merge(s: Scenario): Assumptions {
   }
 }
 
+/**
+ * Brent forward-curve SHAPE (annualized) lifted from Tigbourne's source models — gentle contango
+ * to a long-run plateau. Normalized to year 1 and scaled by the scenario/live price, so the price
+ * slider sets the year-1 price and the path follows the forward curve.
+ */
+export const FORWARD_CURVE = [
+  62.78, 62.33, 63.54, 65.02, 66.2, 66.92, 67.46, 67.73, 67.74, 67.74, 67.74, 67.74, 67.74,
+  67.74, 67.74, 67.74, 67.74, 67.74, 67.74, 67.74, 67.74, 67.74, 67.74, 67.74, 67.74,
+]
+const CURVE_BASE = FORWARD_CURVE[0]
+
+/** Year-t oil price: the year-1 price scaled along the forward-curve shape. */
+function priceForYear(t: number, price1: number): number {
+  const ratio = FORWARD_CURVE[Math.min(t - 1, FORWARD_CURVE.length - 1)] / CURVE_BASE
+  return price1 * ratio
+}
+
 export interface YearPoint {
   year: number
   baseCum: number // cumulative discounted cash flow, no CEOR
@@ -105,6 +122,7 @@ export interface FieldEconomics {
   intervention: InterventionPoint[] // incremental NPV vs. water cut at intervention
   currentWaterCut: number | null
   earlyVsLate: number | null // ×: value intervening at 10% vs. the field's current water cut
+  ceorDeadlineWaterCut: number | null // latest water cut at which starting CEOR still pays (NPV>0)
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
@@ -174,10 +192,11 @@ function ceorCurve(q0: number, decline: number, s: number, A: Assumptions): numb
 }
 
 /** Discounted NPV of an annual production stream with per-year shut-in (profit floored at 0). */
-function npvOfCurve(curve: number[], netbackPerBbl: number, capex: number, pa: number, A: Assumptions): number {
+function npvOfCurve(curve: number[], price1: number, costPerBbl: number, capex: number, pa: number, A: Assumptions): number {
   let npv = -capex
   for (let t = 1; t <= A.years; t++) {
-    const profit = Math.max(curve[t - 1] * A.daysPerYear * netbackPerBbl, 0)
+    const netback = priceForYear(t, price1) - costPerBbl
+    const profit = Math.max(curve[t - 1] * A.daysPerYear * netback, 0)
     npv += profit / Math.pow(1 + A.discountRate, t)
   }
   npv -= pa / Math.pow(1 + A.discountRate, A.years)
@@ -189,8 +208,8 @@ function npvAt(f: OilField, price: number, s: number, A: Assumptions) {
   const { q0, decline, lift, wells, waterCut, pa } = inputs(f)
   const chem = chemPerBblOil(waterCut, A)
   const capex = wells * A.ceorInfraPerWell
-  const base = npvOfCurve(baseCurve(q0, decline, A), price - lift, 0, pa, A)
-  const ceor = npvOfCurve(ceorCurve(q0, decline, s, A), price - lift - chem, capex, pa, A)
+  const base = npvOfCurve(baseCurve(q0, decline, A), price, lift, 0, pa, A)
+  const ceor = npvOfCurve(ceorCurve(q0, decline, s, A), price, lift + chem, capex, pa, A)
   return { base, ceor, capex }
 }
 
@@ -208,8 +227,9 @@ function cumulativeSeries(f: OilField, s: number, A: Assumptions): YearPoint[] {
   let ceor = -capex
   for (let t = 1; t <= years; t++) {
     const disc = 1 / Math.pow(1 + r, t)
-    base += Math.max(baseQ[t - 1] * daysPerYear * (price - lift), 0) * disc
-    ceor += Math.max(ceorQ[t - 1] * daysPerYear * (price - lift - chem), 0) * disc
+    const py = priceForYear(t, price)
+    base += Math.max(baseQ[t - 1] * daysPerYear * (py - lift), 0) * disc
+    ceor += Math.max(ceorQ[t - 1] * daysPerYear * (py - lift - chem), 0) * disc
     let b = base
     let c = ceor
     if (t === years) {
@@ -260,16 +280,30 @@ function interventionCurve(f: OilField, A: Assumptions): InterventionPoint[] {
   const pts: InterventionPoint[] = []
   for (let w = 10; w <= 90; w += 10) {
     const s = clamp(rq * waterScore(w), 0, 1)
-    const netback = A.basePrice - lift - chemPerBblOil(w, A)
+    const cost = lift + chemPerBblOil(w, A)
     const ceorQ = ceorCurve(q0, decline, s, A)
     let npv = -capex
     for (let t = 1; t <= A.years; t++) {
       const incremental = Math.max(ceorQ[t - 1] - baseQ[t - 1], 0)
+      const netback = priceForYear(t, A.basePrice) - cost
       npv += incremental * A.daysPerYear * netback * (1 / Math.pow(1 + A.discountRate, t))
     }
     pts.push({ waterCut: w, npv })
   }
   return pts
+}
+
+/** The water cut at which the incremental CEOR NPV crosses zero (the "deadline" to intervene). */
+function deadlineWaterCut(pts: InterventionPoint[]): number | null {
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1].npv
+    const b = pts[i].npv
+    if (a >= 0 && b < 0) {
+      const t = a === b ? 0 : a / (a - b)
+      return Math.round(pts[i - 1].waterCut + t * (pts[i].waterCut - pts[i - 1].waterCut))
+    }
+  }
+  return null // never crosses within 10–90% (always pays, or never pays — UI disambiguates)
 }
 
 function npvAtWaterCut(pts: InterventionPoint[], w: number): number {
@@ -356,6 +390,7 @@ export function fieldEconomics(f: OilField, scenario: Scenario = {}): FieldEcono
       intervention: [],
       currentWaterCut: f.waterCut,
       earlyVsLate: null,
+      ceorDeadlineWaterCut: null,
     }
   }
 
@@ -372,6 +407,7 @@ export function fieldEconomics(f: OilField, scenario: Scenario = {}): FieldEcono
   const optimumNpv = intervention[0]?.npv ?? 0
   const currentNpv = f.waterCut != null ? npvAtWaterCut(intervention, f.waterCut) : optimumNpv
   const earlyVsLate = f.waterCut != null && currentNpv > 0 ? Math.round((optimumNpv / currentNpv) * 10) / 10 : null
+  const ceorDeadlineWaterCut = deadlineWaterCut(intervention)
   const { pa: paCost, paEstimated } = inputs(f)
 
   return {
@@ -392,6 +428,7 @@ export function fieldEconomics(f: OilField, scenario: Scenario = {}): FieldEcono
     intervention,
     currentWaterCut: f.waterCut,
     earlyVsLate,
+    ceorDeadlineWaterCut,
   }
 }
 

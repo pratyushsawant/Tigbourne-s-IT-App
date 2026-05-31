@@ -6,7 +6,6 @@ import {
   CartesianGrid,
   ComposedChart,
   Line,
-  ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -141,15 +140,7 @@ export function Economics({ field }: { field: OilField }) {
 
   // Nice Y-axis scales with headroom so the lines/areas aren't clipped at the chart edges.
   const npvScale = niceScale(eco.series.flatMap((p) => [p.baseCum, p.ceorCum]))
-  const beScale = niceScale(eco.sweep.flatMap((p) => [p.base, p.ceor]))
   const ivScale = niceScale(eco.intervention.map((p) => p.npv))
-
-  // When a break-even has no zero-crossing in the $10–130 sweep, say which side.
-  const beLabel = (be: number | null, key: 'base' | 'ceor') => {
-    if (be != null) return `$${be}/bbl`
-    const lowest = eco.sweep[0]?.[key] ?? 0
-    return lowest > 0 ? '< $10/bbl' : '> $130/bbl'
-  }
 
   return (
     <div className="space-y-6">
@@ -262,75 +253,29 @@ export function Economics({ field }: { field: OilField }) {
         />
       </div>
 
-      {/* Break-even */}
+      {/* CEOR break-even — water cut */}
       <div className="rounded-2xl border border-black/[0.06] bg-white p-6 shadow-card">
-        <h3 className="text-sm font-semibold text-ink">Break-even oil price</h3>
+        <h3 className="text-sm font-semibold text-ink">CEOR break-even — water cut</h3>
         <p className="mt-0.5 text-xs text-ink-faint">
-          Where each curve crosses zero is the oil price below which the field stops making money (shutdown). The dashed
-          line marks your scenario price of ${scenario.price}/bbl.
-        </p>
-        <div className="mt-4 flex flex-wrap gap-3">
-          <Stat label="Break-even — no CEOR" value={beLabel(eco.breakEvenBase, 'base')} />
-          <Stat label="Break-even — with CEOR" value={beLabel(eco.breakEvenCeor, 'ceor')} accent="gold" />
-          {eco.crossover != null && <Stat label="CEOR wins above" value={`$${eco.crossover}/bbl`} accent="pos" />}
-        </div>
-        <div className="mt-5 h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={eco.sweep} margin={{ left: 4, right: 8, top: 18, bottom: 12 }}>
-              <CartesianGrid stroke="rgba(0,0,0,0.05)" vertical={false} />
-              <XAxis
-                dataKey="price"
-                type="number"
-                height={44}
-                domain={[10, 130]}
-                ticks={[10, 30, 50, 70, 90, 110, 130]}
-                tick={{ fontSize: 11, fill: '#8e8e93' }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v) => `$${v}`}
-                label={{ value: 'Oil price ($/bbl)', position: 'insideBottom', offset: 0, fontSize: 11, fill: '#8e8e93' }}
-              />
-              <YAxis
-                domain={beScale.domain}
-                ticks={beScale.ticks}
-                tick={{ fontSize: 11, fill: '#8e8e93' }}
-                axisLine={false}
-                tickLine={false}
-                width={70}
-                tickFormatter={(v) => usdAxis(v)}
-              />
-              <Tooltip {...tip} formatter={(v: number, n) => [usdCompact(v), n === 'ceor' ? 'With CEOR' : 'Without CEOR']} labelFormatter={(l) => `$${l}/bbl`} />
-              <ReferenceLine y={0} stroke="rgba(0,0,0,0.35)" />
-              <ReferenceLine x={scenario.price} stroke="#b07523" strokeDasharray="4 4" label={{ value: 'Scenario', fontSize: 10, fill: '#b07523', position: 'insideTopRight', offset: 6 }} />
-              <Line type="monotone" dataKey="base" name="Without CEOR" stroke={INK} strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="ceor" name="With CEOR" stroke={GOLD} strokeWidth={2.5} dot={false} />
-              {eco.breakEvenBase != null && <ReferenceDot x={eco.breakEvenBase} y={0} r={4} fill={INK} stroke="#fff" strokeWidth={1.5} />}
-              {eco.breakEvenCeor != null && <ReferenceDot x={eco.breakEvenCeor} y={0} r={4} fill={GOLD} stroke="#fff" strokeWidth={1.5} />}
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-        <Legend
-          items={[
-            { c: INK, t: 'Without CEOR' },
-            { c: GOLD, t: 'With CEOR' },
-          ]}
-        />
-      </div>
-
-      {/* Water-cut intervention curve */}
-      <div className="rounded-2xl border border-black/[0.06] bg-white p-6 shadow-card">
-        <h3 className="text-sm font-semibold text-ink">Value of early intervention</h3>
-        <p className="mt-0.5 text-xs text-ink-faint">
-          Incremental NPV from starting CEOR at each water-cut level. Mobile oil left behind by waiting can't be
-          recovered — intervening early is worth dramatically more.
+          Incremental NPV from starting CEOR at each water-cut level. It falls as water cut rises — less mobile
+          oil remains and the chemical cost per barrel climbs. Where it crosses zero is the latest water cut at
+          which a CEOR program still pays. The dashed line marks this field today.
         </p>
         {eco.currentWaterCut != null && (
           <div className="mt-4 flex flex-wrap gap-3">
             <Stat label="This field today" value={`${eco.currentWaterCut}% water cut`} />
-            {eco.earlyVsLate != null && eco.earlyVsLate > 1 && (
-              <Stat label="Value forgone vs. 10% start" value={`≈${eco.earlyVsLate}×`} accent="neg" />
-            )}
-            <Stat label="Optimal NPV (≤10%)" value={usdCompact(eco.intervention[0]?.npv ?? 0)} accent="gold" />
+            <Stat
+              label="CEOR break-even"
+              value={
+                eco.ceorDeadlineWaterCut != null
+                  ? `${eco.ceorDeadlineWaterCut}% water cut`
+                  : (eco.intervention[0]?.npv ?? 0) <= 0
+                    ? 'Uneconomic'
+                    : '> 90%'
+              }
+              accent="gold"
+            />
+            <Stat label="Optimal NPV (≤10%)" value={usdCompact(eco.intervention[0]?.npv ?? 0)} accent="pos" />
           </div>
         )}
         <div className="mt-5 h-72">
@@ -354,19 +299,30 @@ export function Economics({ field }: { field: OilField }) {
               />
               <YAxis domain={ivScale.domain} ticks={ivScale.ticks} tick={{ fontSize: 11, fill: '#8e8e93' }} axisLine={false} tickLine={false} width={70} tickFormatter={(v) => usdAxis(v)} />
               <Tooltip {...tip} formatter={(v: number) => [usdCompact(v), 'Incremental NPV']} labelFormatter={(l) => `Intervene at ${l}% water cut`} cursor={{ fill: 'rgba(212,167,73,0.08)' }} />
+              <ReferenceLine y={0} stroke="rgba(0,0,0,0.35)" />
+              {eco.ceorDeadlineWaterCut != null && (
+                <ReferenceLine
+                  x={eco.ceorDeadlineWaterCut}
+                  stroke="#e5484d"
+                  strokeDasharray="4 4"
+                  label={{ value: 'Break-even', fontSize: 10, fill: '#e5484d', position: 'insideTopRight', offset: 6 }}
+                />
+              )}
               {eco.currentWaterCut != null && (
-                <ReferenceLine x={Math.round(eco.currentWaterCut / 10) * 10} stroke="#b07523" strokeDasharray="4 4" label={{ value: 'Today', fontSize: 10, fill: '#b07523', position: 'insideTopRight', offset: 6 }} />
+                <ReferenceLine x={Math.round(eco.currentWaterCut / 10) * 10} stroke="#b07523" strokeDasharray="4 4" label={{ value: 'Today', fontSize: 10, fill: '#b07523', position: 'insideTopLeft', offset: 6 }} />
               )}
               <Bar dataKey="npv" radius={[5, 5, 0, 0]}>
                 {eco.intervention.map((p) => (
-                  <Cell key={p.waterCut} fill={p.waterCut <= 30 ? 'url(#wcFill)' : p.waterCut <= 60 ? '#dfbe6e' : '#ebd8a4'} />
+                  <Cell key={p.waterCut} fill={p.npv < 0 ? '#e7c4b8' : p.waterCut <= 30 ? 'url(#wcFill)' : p.waterCut <= 60 ? '#dfbe6e' : '#ebd8a4'} />
                 ))}
               </Bar>
             </ComposedChart>
           </ResponsiveContainer>
         </div>
         <p className="mt-3 text-[11px] text-ink-faint">
-          Tigbourne's data shows intervening at ~10% water cut is roughly <b className="text-ink-soft">10× more valuable</b> than waiting until ~80% — this chart prices that gap for this field.
+          Intervening early is worth far more than waiting — each step up in water cut leaves mobile oil behind and
+          raises the chemical cost per barrel. Past the break-even water cut, a CEOR program no longer earns its cost
+          on this field.
         </p>
       </div>
 
