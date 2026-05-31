@@ -254,11 +254,12 @@ export function Economics({ field }: { field: OilField }) {
                 width={70}
                 tickFormatter={(v) => usdAxis(v)}
               />
-              <Tooltip {...tip} formatter={(v: number, n) => [usdCompact(v), n === 'ceorCum' ? 'With CEOR' : 'Without CEOR']} labelFormatter={(l) => `Year ${l}`} />
+              <Tooltip {...tip} formatter={(v: number, n) => [usdCompact(v), String(n)]} labelFormatter={(l) => `Year ${l}`} />
               <ReferenceLine y={0} stroke="rgba(0,0,0,0.25)" strokeDasharray="3 3" />
-              <Area type="monotone" dataKey="ceorCum" stroke="none" fill="url(#ceorFill)" />
+              {/* One series per line (CEOR = filled area with a gold stroke) — avoids a duplicate
+                  tooltip entry and labels each by its `name`. */}
+              <Area type="monotone" dataKey="ceorCum" name="With CEOR" stroke={GOLD} strokeWidth={2.5} fill="url(#ceorFill)" dot={false} />
               <Line type="monotone" dataKey="baseCum" name="Without CEOR" stroke={INK} strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="ceorCum" name="With CEOR" stroke={GOLD} strokeWidth={2.5} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
