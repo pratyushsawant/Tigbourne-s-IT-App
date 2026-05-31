@@ -346,7 +346,8 @@ function computeDrillVsCeor(f: OilField, s: number, A: Assumptions): DrillVsCeor
 
   // The SAME incremental-oil stream both strategies aim to recover (CEOR's uplift schedule).
   const baseQ = baseCurve(q0, decline, A)
-  const inc = ceorCurve(q0, decline, s, A).map((q, i) => Math.max(q - baseQ[i], 0))
+  const ceorQ = ceorCurve(q0, decline, s, A)
+  const inc = ceorQ.map((q, i) => Math.max(q - baseQ[i], 0))
   const peakInc = Math.max(...inc, 0)
   if (peakInc <= 0) return null
   const totalBbls = inc.reduce((sum, q) => sum + q * A.daysPerYear, 0)
@@ -357,19 +358,28 @@ function computeDrillVsCeor(f: OilField, s: number, A: Assumptions): DrillVsCeor
   const drillCapexFor = (incArr: number[]) =>
     (Math.max(1, Math.ceil(Math.max(...incArr, 0) / (perWell as number)))) * (f.drillCost as number)
 
-  // CEOR strategy — pays chemical opex on the incremental oil + small one-time infra.
-  const chem = chemPerBblOil(waterCut, A)
-  let chemPV = 0
-  for (let t = 1; t <= A.years; t++) chemPV += (inc[t - 1] * A.daysPerYear * chem) / Math.pow(1 + A.discountRate, t)
-  const ceorNpv = streamNpvOf(inc, lift + chem, ceorInfra, A)
-  const ceor = { capex: ceorInfra, npv: ceorNpv, perBbl: totalBbls > 0 ? (ceorInfra + chemPV) / totalBbls : 0 }
+  // PV of the incremental oil at the wellhead netback (shared by both strategies), and the PV of
+  // the chemical flood charged across ALL treated oil (the real CEOR program cost — a field-wide
+  // flood, not just the incremental barrels; this is what the headline "CEOR uplift" uses too).
+  const incValueOf = (incArr: number[]) => streamNpvOf(incArr, lift, 0, A)
+  const chemPVof = (qCurve: number[], chem: number) => {
+    let pv = 0
+    for (let t = 1; t <= A.years; t++) pv += (qCurve[t - 1] * A.daysPerYear * chem) / Math.pow(1 + A.discountRate, t)
+    return pv
+  }
 
-  // Drilling strategy — sink enough wells to deliver the same peak incremental rate; no chem.
+  const incValue = incValueOf(inc)
+  const wholeChemPV = chemPVof(ceorQ, chemPerBblOil(waterCut, A))
+  // CEOR value = incremental oil − field-wide chem flood − infra (≡ the headline uplift).
+  const ceorNpv = incValue - wholeChemPV - ceorInfra
+  const ceor = { capex: ceorInfra, npv: ceorNpv, perBbl: totalBbls > 0 ? (wholeChemPV + ceorInfra) / totalBbls : 0 }
+
+  // Drilling strategy — sink enough wells to deliver the same incremental oil; capex, no chem.
   let drill: DrillVsCeor['drill'] = null
   if (canDrill) {
     const wells = Math.max(1, Math.ceil(peakInc / (perWell as number)))
     const drillCapex = wells * (f.drillCost as number)
-    drill = { wells, capex: drillCapex, npv: streamNpvOf(inc, lift, drillCapex, A), perBbl: totalBbls > 0 ? drillCapex / totalBbls : 0 }
+    drill = { wells, capex: drillCapex, npv: incValue - drillCapex, perBbl: totalBbls > 0 ? drillCapex / totalBbls : 0 }
   }
 
   const best = Math.max(ceorNpv, drill ? drill.npv : -Infinity)
@@ -379,8 +389,8 @@ function computeDrillVsCeor(f: OilField, s: number, A: Assumptions): DrillVsCeor
   if (s < CEOR_VIABILITY_MIN) recommend = drill && drill.npv > 0 ? 'Drill' : 'Neither'
   else if (best <= 0) recommend = 'Neither'
   else recommend = drill && drill.npv > ceorNpv ? 'Drill' : 'CEOR'
-  // "Chemicals are X× cheaper" — drilling capex vs. the total CEOR program cost (chem PV + infra).
-  const ceorProgramCost = ceorInfra + chemPV
+  // Buddy's "multiplier": drilling capex ÷ the CEOR program cost (field-wide chem flood + infra).
+  const ceorProgramCost = wholeChemPV + ceorInfra
   const multiplier = drill && ceorProgramCost > 0 ? Math.round((drill.capex / ceorProgramCost) * 10) / 10 : null
 
   // Crossover view (Buddy's DASH-RESULT): CEOR vs drill NPV swept across intervention water cut.
@@ -389,9 +399,11 @@ function computeDrillVsCeor(f: OilField, s: number, A: Assumptions): DrillVsCeor
   let crossoverWaterCut: number | null = null
   for (let w = 10; w <= 90; w += 10) {
     const sw = clamp(rq * waterScore(w), 0, 1)
-    const incW = ceorCurve(q0, decline, sw, A).map((q, i) => Math.max(q - baseQ[i], 0))
-    const ceorW = streamNpvOf(incW, lift + chemPerBblOil(w, A), ceorInfra, A)
-    const drillW = canDrill ? streamNpvOf(incW, lift, drillCapexFor(incW), A) : ceorW
+    const ceorQw = ceorCurve(q0, decline, sw, A)
+    const incW = ceorQw.map((q, i) => Math.max(q - baseQ[i], 0))
+    const incValW = incValueOf(incW)
+    const ceorW = incValW - chemPVof(ceorQw, chemPerBblOil(w, A)) - ceorInfra
+    const drillW = canDrill ? incValW - drillCapexFor(incW) : ceorW
     curve.push({ waterCut: w, ceor: ceorW, drill: drillW })
     if (crossoverWaterCut === null && canDrill && drillW > ceorW) crossoverWaterCut = w
   }

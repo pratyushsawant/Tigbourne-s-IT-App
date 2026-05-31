@@ -131,6 +131,12 @@ describe('fieldEconomics', () => {
     expect(d.ceor.npv).toBeGreaterThan(d.drill!.npv)
   })
 
+  it("card's CEOR NPV equals the headline CEOR uplift (same field-wide chem basis)", () => {
+    const eco = fieldEconomics(makeField())
+    const card = eco.drillVsCeor!
+    expect(Math.abs(card.ceor.npv - eco.uplift) / Math.abs(eco.uplift)).toBeLessThan(0.02)
+  })
+
   it('does not recommend CEOR once water cut is past the viable window (Shengli-like, 93%)', () => {
     const f = makeField({
       oilBblPerDay: 85_000, numWells: 620, bblPerWell: 137, waterCut: 93,
