@@ -14,35 +14,64 @@ REFERENCE = [
 ]
 _CACHE: dict = {"at": 0.0, "data": None}
 _TTL = 600  # 10 minutes
-# Keyless live feed: Brent = cb.f, WTI = cl.f. (Dubai isn't published free — derived from Brent.)
+_UA = {"User-Agent": "Mozilla/5.0 (compatible; TigbourneBot/1.0)"}
+# Keyless feeds. Dubai isn't published free — derived from Brent. Multiple sources for resilience
+# (datacenter IPs are sometimes blocked by one provider but not another).
+_YAHOO = "https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=5d"
 _STOOQ = "https://stooq.com/q/l/?s=cb.f+cl.f&f=sd2t2ohlc&e=csv"
 
 
-async def _fetch_stooq() -> list[dict]:
-    async with httpx.AsyncClient(timeout=8) as client:
-        resp = await client.get(_STOOQ)
-        resp.raise_for_status()
-        rows: dict = {}
-        for line in resp.text.strip().splitlines():
-            p = line.split(",")
-            if len(p) < 7:
-                continue
+async def _yahoo(client: httpx.AsyncClient) -> dict:
+    out: dict = {}
+    for sym, key in (("BZ=F", "BRENT"), ("CL=F", "WTI")):
+        r = await client.get(_YAHOO.format(sym=sym), headers=_UA)
+        r.raise_for_status()
+        meta = r.json()["chart"]["result"][0]["meta"]
+        price = float(meta["regularMarketPrice"])
+        prev = float(meta.get("previousClose") or meta.get("chartPreviousClose") or price)
+        out[key] = (price, price - prev)
+    return out
+
+
+async def _stooq(client: httpx.AsyncClient) -> dict:
+    r = await client.get(_STOOQ, headers=_UA)
+    r.raise_for_status()
+    out: dict = {}
+    for line in r.text.strip().splitlines():
+        p = line.split(",")
+        if len(p) < 7:
+            continue
+        try:
+            open_, close = float(p[3]), float(p[6])
+        except ValueError:
+            continue
+        if p[0].upper() == "CB.F":
+            out["BRENT"] = (close, close - open_)
+        elif p[0].upper() == "CL.F":
+            out["WTI"] = (close, close - open_)
+    return out
+
+
+async def _fetch_quotes() -> tuple[list[dict], bool]:
+    async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
+        for source in (_yahoo, _stooq):
             try:
-                open_, close = float(p[3]), float(p[6])
-            except ValueError:
+                q = await source(client)
+                if q.get("BRENT") and q.get("WTI"):
+                    bp, bc = q["BRENT"]
+                    wp, wc = q["WTI"]
+                    dubai = bp - settings.dubai_differential
+                    return (
+                        [
+                            {"symbol": "BRENT", "name": "Brent", "price": round(bp, 2), "change": round(bc, 2)},
+                            {"symbol": "WTI", "name": "WTI", "price": round(wp, 2), "change": round(wc, 2)},
+                            {"symbol": "DUBAI", "name": "Dubai (derived)", "price": round(dubai, 2), "change": round(bc, 2)},
+                        ],
+                        True,
+                    )
+            except Exception:  # noqa: BLE001 — try the next source
                 continue
-            rows[p[0].upper()] = (close, close - open_)
-        brent, wti = rows.get("CB.F"), rows.get("CL.F")
-        if not brent or not wti:
-            raise RuntimeError("stooq: missing Brent/WTI quotes")
-        bp, bc = brent
-        wp, wc = wti
-        dubai = bp - settings.dubai_differential  # Dubai ≈ Brent − EFS differential
-        return [
-            {"symbol": "BRENT", "name": "Brent", "price": round(bp, 2), "change": round(bc, 2)},
-            {"symbol": "WTI", "name": "WTI", "price": round(wp, 2), "change": round(wc, 2)},
-            {"symbol": "DUBAI", "name": "Dubai (derived)", "price": round(dubai, 2), "change": round(bc, 2)},
-        ]
+    return REFERENCE, False
 
 
 @router.get("/forward-curve")
@@ -51,21 +80,18 @@ async def forward_curve() -> dict:
     if _CACHE["data"] and now - _CACHE["at"] < _TTL:
         return _CACHE["data"]
 
-    quotes, live = REFERENCE, False
-    try:
-        if settings.price_api_url:
-            # Optional real provider (e.g. a true Dubai feed). Adapt to its payload shape.
+    if settings.price_api_url:
+        try:
             async with httpx.AsyncClient(timeout=8) as client:
                 resp = await client.get(settings.price_api_url)
                 resp.raise_for_status()
-                quotes = resp.json().get("quotes", REFERENCE)
-                live = True
-        else:
-            quotes = await _fetch_stooq()
-            live = True
-    except Exception:  # noqa: BLE001 — any failure falls back to reference prices
-        quotes, live = REFERENCE, False
+                quotes, live = resp.json().get("quotes", REFERENCE), True
+        except Exception:  # noqa: BLE001
+            quotes, live = await _fetch_quotes()
+    else:
+        quotes, live = await _fetch_quotes()
 
     data = {"quotes": quotes, "live": live, "asOf": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))}
-    _CACHE.update(at=now, data=data)
+    if live:  # only cache successful live data — keep retrying on failure
+        _CACHE.update(at=now, data=data)
     return data
