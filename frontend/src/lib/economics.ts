@@ -101,6 +101,9 @@ export interface DrillVsCeor {
   drill: { wells: number; capex: number; npv: number; perBbl: number } | null
   recommend: 'CEOR' | 'Drill' | 'Neither'
   multiplier: number | null // drill$ ÷ CEOR$ cost ratio (Buddy's "multiplier")
+  // Buddy DASH-RESULT crossover view: CEOR vs drill NPV swept across water cut.
+  curve: { waterCut: number; ceor: number; drill: number }[]
+  crossoverWaterCut: number | null // water cut where drilling overtakes CEOR
 }
 
 export interface FieldEconomics {
@@ -323,46 +326,45 @@ function npvAtWaterCut(pts: InterventionPoint[], w: number): number {
  * CEOR value = the modelled CEOR uplift (NPV with − without). Drilling = sinking wells to add the
  * same peak incremental rate, declining, with no chemical cost. Buddy's "multiplier" = drill$ ÷ CEOR$.
  */
+/** NPV of an incremental-oil stream at a given per-bbl cost, net of upfront capex. */
+function streamNpvOf(inc: number[], costPerBbl: number, capex: number, A: Assumptions): number {
+  let npv = -capex
+  for (let t = 1; t <= A.years; t++) {
+    npv += Math.max(inc[t - 1] * A.daysPerYear * (priceForYear(t, A.basePrice) - costPerBbl), 0) / Math.pow(1 + A.discountRate, t)
+  }
+  return npv
+}
+
 function computeDrillVsCeor(f: OilField, s: number, A: Assumptions): DrillVsCeor | null {
   const { q0, decline, lift, wells: fieldWells, waterCut } = inputs(f)
   if (q0 <= 0) return null
 
   // The SAME incremental-oil stream both strategies aim to recover (CEOR's uplift schedule).
   const baseQ = baseCurve(q0, decline, A)
-  const ceorQ = ceorCurve(q0, decline, s, A)
-  const inc = ceorQ.map((q, i) => Math.max(q - baseQ[i], 0))
+  const inc = ceorCurve(q0, decline, s, A).map((q, i) => Math.max(q - baseQ[i], 0))
   const peakInc = Math.max(...inc, 0)
   if (peakInc <= 0) return null
   const totalBbls = inc.reduce((sum, q) => sum + q * A.daysPerYear, 0)
 
-  // NPV of that identical incremental stream at a given per-bbl cost, net of upfront capex.
-  // Valuing both options on the same stream is the apples-to-apples comparison — the only
-  // difference is the cost structure (chemical opex vs. drilling capex).
-  const streamNpv = (costPerBbl: number, capex: number) => {
-    let npv = -capex
-    for (let t = 1; t <= A.years; t++) {
-      const netback = priceForYear(t, A.basePrice) - costPerBbl
-      npv += Math.max(inc[t - 1] * A.daysPerYear * netback, 0) / Math.pow(1 + A.discountRate, t)
-    }
-    return npv
-  }
+  const ceorInfra = Math.max(fieldWells, 1) * A.ceorInfraPerWell
+  const perWell = f.bblPerWell ?? (f.numWells && f.numWells > 0 && f.oilBblPerDay ? f.oilBblPerDay / f.numWells : null)
+  const canDrill = !!(perWell && perWell > 0 && f.drillCost && f.drillCost > 0)
+  const drillCapexFor = (incArr: number[]) =>
+    (Math.max(1, Math.ceil(Math.max(...incArr, 0) / (perWell as number)))) * (f.drillCost as number)
 
   // CEOR strategy — pays chemical opex on the incremental oil + small one-time infra.
   const chem = chemPerBblOil(waterCut, A)
   let chemPV = 0
   for (let t = 1; t <= A.years; t++) chemPV += (inc[t - 1] * A.daysPerYear * chem) / Math.pow(1 + A.discountRate, t)
-  const ceorInfra = Math.max(fieldWells, 1) * A.ceorInfraPerWell
-  const ceorNpv = streamNpv(lift + chem, ceorInfra)
+  const ceorNpv = streamNpvOf(inc, lift + chem, ceorInfra, A)
   const ceor = { capex: ceorInfra, npv: ceorNpv, perBbl: totalBbls > 0 ? (ceorInfra + chemPV) / totalBbls : 0 }
 
   // Drilling strategy — sink enough wells to deliver the same peak incremental rate; no chem.
   let drill: DrillVsCeor['drill'] = null
-  const perWell = f.bblPerWell ?? (f.numWells && f.numWells > 0 && f.oilBblPerDay ? f.oilBblPerDay / f.numWells : null)
-  if (perWell && perWell > 0 && f.drillCost && f.drillCost > 0) {
-    const wells = Math.max(1, Math.ceil(peakInc / perWell))
-    const drillCapex = wells * f.drillCost
-    const drillNpv = streamNpv(lift, drillCapex)
-    drill = { wells, capex: drillCapex, npv: drillNpv, perBbl: totalBbls > 0 ? drillCapex / totalBbls : 0 }
+  if (canDrill) {
+    const wells = Math.max(1, Math.ceil(peakInc / (perWell as number)))
+    const drillCapex = wells * (f.drillCost as number)
+    drill = { wells, capex: drillCapex, npv: streamNpvOf(inc, lift, drillCapex, A), perBbl: totalBbls > 0 ? drillCapex / totalBbls : 0 }
   }
 
   const best = Math.max(ceorNpv, drill ? drill.npv : -Infinity)
@@ -371,7 +373,20 @@ function computeDrillVsCeor(f: OilField, s: number, A: Assumptions): DrillVsCeor
   const ceorProgramCost = ceorInfra + chemPV
   const multiplier = drill && ceorProgramCost > 0 ? Math.round((drill.capex / ceorProgramCost) * 10) / 10 : null
 
-  return { incrementalBopd: peakInc, ceor, drill, recommend, multiplier }
+  // Crossover view (Buddy's DASH-RESULT): CEOR vs drill NPV swept across intervention water cut.
+  const rq = reservoirScore(f)
+  const curve: DrillVsCeor['curve'] = []
+  let crossoverWaterCut: number | null = null
+  for (let w = 10; w <= 90; w += 10) {
+    const sw = clamp(rq * waterScore(w), 0, 1)
+    const incW = ceorCurve(q0, decline, sw, A).map((q, i) => Math.max(q - baseQ[i], 0))
+    const ceorW = streamNpvOf(incW, lift + chemPerBblOil(w, A), ceorInfra, A)
+    const drillW = canDrill ? streamNpvOf(incW, lift, drillCapexFor(incW), A) : ceorW
+    curve.push({ waterCut: w, ceor: ceorW, drill: drillW })
+    if (crossoverWaterCut === null && canDrill && drillW > ceorW) crossoverWaterCut = w
+  }
+
+  return { incrementalBopd: peakInc, ceor, drill, recommend, multiplier, curve, crossoverWaterCut }
 }
 
 export function fieldEconomics(f: OilField, scenario: Scenario = {}): FieldEconomics {

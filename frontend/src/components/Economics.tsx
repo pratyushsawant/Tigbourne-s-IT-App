@@ -369,6 +369,19 @@ export function Economics({ field }: { field: OilField }) {
             </span>
           </div>
 
+          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            {eco.drillVsCeor.multiplier && (
+              <span className="rounded-full bg-gold-50 px-2.5 py-1 font-medium text-gold-700">
+                Chemicals cost ≈{eco.drillVsCeor.multiplier}× less than drilling this oil
+              </span>
+            )}
+            <span className="rounded-full bg-black/[0.04] px-2.5 py-1 font-medium text-ink-soft">
+              {eco.drillVsCeor.crossoverWaterCut != null
+                ? `CEOR stays ahead up to ~${eco.drillVsCeor.crossoverWaterCut}% water cut`
+                : 'CEOR wins at every water cut'}
+            </span>
+          </div>
+
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             {/* CEOR */}
             <div className={`rounded-2xl border p-5 ${eco.drillVsCeor.recommend === 'CEOR' ? 'border-gold-300 bg-gold-50/50' : 'border-black/[0.06]'}`}>
@@ -398,6 +411,48 @@ export function Economics({ field }: { field: OilField }) {
               </div>
             )}
           </div>
+
+          {/* Buddy's DASH-RESULT crossover view: CEOR vs drill NPV across water cut. */}
+          {eco.drillVsCeor.curve.length > 0 && (
+            <div className="mt-6 border-t border-black/[0.06] pt-5">
+              <p className="text-xs font-medium text-ink-soft">CEOR vs drill across water cut</p>
+              <p className="mt-0.5 text-[11px] text-ink-faint">
+                CEOR's advantage shrinks as water cut rises — drilling overtakes it{' '}
+                {eco.drillVsCeor.crossoverWaterCut != null
+                  ? `near ~${eco.drillVsCeor.crossoverWaterCut}% water cut.`
+                  : 'nowhere in the 10–90% range.'}
+              </p>
+              <div className="mt-3 h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={eco.drillVsCeor.curve} margin={{ left: 4, right: 8, top: 18 }}>
+                    <CartesianGrid stroke="rgba(0,0,0,0.05)" vertical={false} />
+                    <XAxis
+                      dataKey="waterCut"
+                      height={40}
+                      tick={{ fontSize: 11, fill: '#8e8e93' }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v) => `${v}%`}
+                      label={{ value: 'Water cut at intervention', position: 'insideBottom', offset: 0, fontSize: 11, fill: '#8e8e93' }}
+                    />
+                    <YAxis width={70} tick={{ fontSize: 11, fill: '#8e8e93' }} axisLine={false} tickLine={false} tickFormatter={(v) => usdAxis(v)} />
+                    <Tooltip {...tip} formatter={(v: number, n) => [usdCompact(v), String(n)]} labelFormatter={(l) => `${l}% water cut`} />
+                    {eco.currentWaterCut != null && (
+                      <ReferenceLine
+                        x={Math.round(eco.currentWaterCut / 10) * 10}
+                        stroke="#b07523"
+                        strokeDasharray="4 4"
+                        label={{ value: 'Today', fontSize: 10, fill: '#b07523', position: 'insideTopRight', offset: 6 }}
+                      />
+                    )}
+                    <Line type="monotone" dataKey="ceor" name="CEOR" stroke={GOLD} strokeWidth={2.5} dot={false} />
+                    <Line type="monotone" dataKey="drill" name="Drill" stroke="#2563eb" strokeWidth={2} dot={false} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+              <Legend items={[{ c: GOLD, t: 'CEOR (chemicals)' }, { c: '#2563eb', t: 'Drill new wells' }]} />
+            </div>
+          )}
         </div>
       )}
 
