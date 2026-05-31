@@ -129,7 +129,10 @@ export function applyDataset(
   regions?: string[],
 ): void {
   FIELDS = fields
-  RANGES = ranges && Object.keys(ranges).length ? ranges : computeRanges(fields)
+  // Always compute a full range set from the data, then let any server-provided ranges
+  // override. Guarantees every filterable column has a [min,max] so the Explorer can't
+  // crash on a missing key (e.g. a column that's entirely null in the sheet).
+  RANGES = { ...computeRanges(fields), ...(ranges || {}) }
   REGIONS = regions && regions.length ? regions : computeRegions(fields)
 }
 

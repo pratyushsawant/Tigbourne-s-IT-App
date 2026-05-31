@@ -23,7 +23,9 @@ const MAX_RENDER = 250
 type Ranges = Record<string, [number, number]>
 
 function initialRanges(): Ranges {
-  return Object.fromEntries(RANGE_FILTERS.map((c) => [c.key, [...RANGES[c.key]] as [number, number]]))
+  return Object.fromEntries(
+    RANGE_FILTERS.map((c) => [c.key, [...(RANGES[c.key] ?? [0, 0])] as [number, number]]),
+  )
 }
 
 const usdShort = (v: number) => (v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(0)}M` : v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`)
