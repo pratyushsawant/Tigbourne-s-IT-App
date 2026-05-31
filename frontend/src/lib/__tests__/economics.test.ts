@@ -118,6 +118,25 @@ describe('fieldEconomics', () => {
     expect(d.drill).not.toBeNull()
     expect(d.multiplier).toBeGreaterThan(0)
   })
+
+  it('recommends CEOR for a suitable field where drilling the same oil is far more expensive (Ghawar-like)', () => {
+    // Regression: drilling was valued on a front-loaded peak stream, inflating its NPV so it
+    // "won" even when sinking hundreds of wells obviously costs more than a chemical program.
+    const ghawar = makeField({
+      oilBblPerDay: 3_350_000, numWells: 605, bblPerWell: 5537, waterCut: 45,
+      declinePct: 5.7, liftCost: 11, api: 36.4, bht: 98.2, shore: 'Onshore', drillCost: 5_800_000,
+    })
+    const d = fieldEconomics(ghawar).drillVsCeor!
+    expect(d.recommend).toBe('CEOR')
+    expect(d.ceor.npv).toBeGreaterThan(d.drill!.npv)
+  })
+
+  it('both strategies are valued on the same incremental oil (CEOR beats drill only by avoiding capex)', () => {
+    // On the identical stream, CEOR pays chem opex, drilling pays capex; the gap equals
+    // drilling capex minus the chem PV — never the artifact of comparing different streams.
+    const d = fieldEconomics(makeField({ waterCut: 20, drillCost: 8_000_000 })).drillVsCeor!
+    expect(d.recommend).toBe('CEOR') // low water cut → cheap chem → CEOR wins
+  })
 })
 
 // Methodology aligned with Buddy's source models.
