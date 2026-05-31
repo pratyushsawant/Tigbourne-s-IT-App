@@ -23,6 +23,10 @@ per-field economics, and export analysis. Built to be sold to Fortune 500/1000 b
 ## Project structure
 - `src/lib/fields.ts` — typed dataset (`FIELDS`), column metadata (`COLUMNS`), formatting, ranges.
 - `src/lib/economics.ts` — the DCF / CEOR / break-even / drill-vs-CEOR engine. **Pure functions.**
+  Methodology mirrors Buddy's source models (Simple EOR + Drill-v-CEOR): **25% discount, ~25-yr
+  horizon, geometric decline, a front-loaded 5-yr CEOR uplift schedule (+20/15/10/5/0% × suitability),
+  chemical cost that scales with water cut ((WC/(1-WC))·$0.30/bbl-water), and per-year shut-in**
+  (a year only counts when revenue − lift − chem > 0). Single price (not a forward curve) — screening-grade.
 - `src/lib/integrity.ts` — data-quality (audit log + mismatches) derived from `src/data/integrity.json`.
 - `src/lib/prices.ts` — live-price hook with reference fallback.
 - `src/lib/billing.ts` — Stripe-ready checkout entrypoints (stubbed until backend exists).

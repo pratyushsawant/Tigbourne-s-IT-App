@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fieldEconomics, suitabilityFactor, usdCompact } from '../economics'
+import { ASSUMPTIONS, fieldEconomics, suitabilityFactor, usdCompact } from '../economics'
 import { FIELDS, type OilField } from '../fields'
 
 // A synthetic, well-suited producing field — lets us assert exact behaviour without data drift.
@@ -104,13 +104,43 @@ describe('fieldEconomics', () => {
     expect(Number.isFinite(d.ceor.npv)).toBe(true)
   })
 
-  it('water-cut intervention curve is downward-sloping (early intervention worth ~10x late)', () => {
+  it('water-cut intervention curve is downward-sloping (early intervention worth substantially more)', () => {
     const curve = fieldEconomics(makeField()).intervention
     expect(curve.length).toBeGreaterThan(2)
     const early = curve[0] // ~10% water cut
     const late = curve[curve.length - 1] // ~90%
     expect(early.npv).toBeGreaterThan(late.npv)
-    expect(early.npv / Math.max(late.npv, 1)).toBeGreaterThan(3)
+    expect(early.npv / Math.max(late.npv, 1)).toBeGreaterThan(2)
+  })
+
+  it('exposes a drill-vs-CEOR cost multiplier when a well program can be sized', () => {
+    const d = fieldEconomics(makeField()).drillVsCeor!
+    expect(d.drill).not.toBeNull()
+    expect(d.multiplier).toBeGreaterThan(0)
+  })
+})
+
+// Methodology aligned with Buddy's source models.
+describe('Buddy-aligned methodology', () => {
+  it('uses a 25% discount rate over ~25 years by default', () => {
+    expect(ASSUMPTIONS.discountRate).toBe(0.25)
+    expect(ASSUMPTIONS.years).toBe(25)
+  })
+
+  it('chemical cost rises with water cut, so a wetter field gets less CEOR uplift', () => {
+    const dry = fieldEconomics(makeField({ waterCut: 20 })).uplift
+    const wet = fieldEconomics(makeField({ waterCut: 85 })).uplift
+    expect(dry).toBeGreaterThan(wet)
+  })
+
+  it('front-loads the CEOR uplift: the with/without gap widens fastest in the first 5 years', () => {
+    const s = fieldEconomics(makeField()).series
+    const gap = (y: number) => {
+      const p = s.find((x) => x.year === y)!
+      return p.ceorCum - p.baseCum
+    }
+    // Gap should be growing through the uplift-schedule years.
+    expect(gap(5)).toBeGreaterThan(gap(1))
   })
 })
 

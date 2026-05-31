@@ -59,7 +59,7 @@ function niceScale(vals: number[]): { domain: [number, number]; ticks: number[] 
 const DEFAULT_SCENARIO: Required<Scenario> = {
   price: ASSUMPTIONS.basePrice,
   discountRate: ASSUMPTIONS.discountRate,
-  chemOpex: ASSUMPTIONS.chemOpex,
+  chemPerBblWater: ASSUMPTIONS.chemPerBblWater,
   years: ASSUMPTIONS.years,
 }
 
@@ -126,7 +126,7 @@ export function Economics({ field }: { field: OilField }) {
   }
   const dirty =
     priceTouched ||
-    (['discountRate', 'chemOpex', 'years'] as (keyof Scenario)[]).some((k) => scenario[k] !== DEFAULT_SCENARIO[k])
+    (['discountRate', 'chemPerBblWater', 'years'] as (keyof Scenario)[]).some((k) => scenario[k] !== DEFAULT_SCENARIO[k])
 
   if (!eco.ok) {
     return (
@@ -182,7 +182,7 @@ export function Economics({ field }: { field: OilField }) {
         <div className="mt-5 grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
           <ScenarioSlider k="price" value={scenario.price} onChange={set('price')} />
           <ScenarioSlider k="discountRate" value={scenario.discountRate} onChange={set('discountRate')} />
-          <ScenarioSlider k="chemOpex" value={scenario.chemOpex} onChange={set('chemOpex')} />
+          <ScenarioSlider k="chemPerBblWater" value={scenario.chemPerBblWater} onChange={set('chemPerBblWater')} />
           <ScenarioSlider k="years" value={scenario.years} onChange={set('years')} />
         </div>
       </div>
@@ -429,7 +429,7 @@ export function Economics({ field }: { field: OilField }) {
 
       <p className="px-1 text-[11px] leading-relaxed text-ink-faint">
         Screening estimates only — a transparent DCF over {scenario.years} years at a{' '}
-        {(scenario.discountRate * 100).toFixed(1)}% discount rate, ${scenario.chemOpex.toFixed(1)}/bbl chemical opex, and
+        {(scenario.discountRate * 100).toFixed(1)}% discount rate, ${scenario.chemPerBblWater.toFixed(2)}/bbl-water chemical cost, and
         end-of-life P&amp;A. CEOR uplift is scaled by the field's API gravity, reservoir temperature and water cut. Not
         reserves-grade valuation or investment advice.
       </p>
