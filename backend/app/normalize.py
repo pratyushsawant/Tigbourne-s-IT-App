@@ -67,8 +67,16 @@ def normalize_row(region: str, row: list, field_id: int) -> Optional[dict]:
     rec["shore"] = normalize_shore(rec.get("shore"))
     # Water cut: fractions (<=1) → percent; handles the Asia mixed convention.
     wc = rec.get("waterCut")
-    if isinstance(wc, (int, float)) and wc <= 1.0:
-        rec["waterCut"] = round(wc * 100, 1)
+    if isinstance(wc, (int, float)):
+        if wc <= 1.0:
+            wc = round(wc * 100, 1)
+        # Water cut is physically 0–100%. Void (don't fabricate) impossible values and flag them,
+        # keeping the rest of the row — bad cells are flagged, never silently dropped or clamped.
+        if wc < 0 or wc > 100:
+            rec["waterCut"] = None
+            rec["_wcFlag"] = True
+        else:
+            rec["waterCut"] = wc
     return rec
 
 
@@ -112,11 +120,15 @@ def compute_mismatches(records: list[dict]) -> list[list]:
 def build_integrity(records: list[dict], prior_audit: Optional[list], source: str) -> dict:
     """Compute mismatches and prepend an audit entry for this ingest run."""
     mismatches = compute_mismatches(records)
+    wc_flagged = sum(1 for r in records if r.get("_wcFlag"))
     audit = list(prior_audit or [])
     today = datetime.utcnow().strftime("%Y-%m-%d")
+    what = f"Loaded {len(records)} fields from {source}; flagged {len(mismatches)} production mismatches (≥5%)"
+    if wc_flagged:
+        what += f"; voided {wc_flagged} impossible water-cut values (>100% — source entry errors)"
     entry = [
         0, "All", "—", "Ingest",
-        f"Loaded {len(records)} fields from {source}; flagged {len(mismatches)} production mismatches (≥5%)",
+        what,
         "Scheduled data sync — bad rows flagged, never dropped",
         today,
     ]

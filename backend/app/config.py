@@ -16,7 +16,8 @@ class Settings(BaseSettings):
     frontend_data_dir: str = "../oilfield-platform/src/data"
 
     google_sheet_id: Optional[str] = None
-    google_service_account_file: str = "service-account.json"
+    google_api_key: Optional[str] = None  # simplest auth; sheet must be link-viewable
+    google_service_account_file: str = "service-account.json"  # private auth (preferred for NDA data)
     ingest_secret: str = "change-me-ingest-secret"
 
     stripe_secret_key: Optional[str] = None

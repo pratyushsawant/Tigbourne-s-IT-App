@@ -10,13 +10,11 @@ class IngestError(Exception):
 
 
 def _validate(records: list[dict]) -> None:
-    """Cheap sanity checks. On failure we raise and the caller keeps the prior
-    version serving — the site never breaks on a malformed sheet."""
+    """Catastrophic-only guard. Individual bad cells are flagged/voided during normalization
+    (never block the load); we only refuse a wholesale-broken sheet so the prior version keeps
+    serving and the site never breaks."""
     if len(records) < 50:
         raise IngestError(f"Only {len(records)} valid rows parsed — refusing to replace dataset")
-    bad_wc = [r for r in records if isinstance(r.get("waterCut"), (int, float)) and not (0 <= r["waterCut"] <= 100)]
-    if bad_wc:
-        raise IngestError(f"{len(bad_wc)} rows have out-of-range water cut after normalization")
 
 
 def _ingest(session: Session, by_region: dict[str, list[list]], source_label: str, source_tag: str):
