@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     google_api_key: Optional[str] = None  # simplest auth; sheet must be link-viewable
     google_service_account_file: str = "service-account.json"  # private auth (preferred for NDA data)
     ingest_secret: str = "change-me-ingest-secret"
+    ingest_poll_minutes: int = 0  # >0 → auto re-sync the sheet every N minutes (0 = disabled)
 
     stripe_secret_key: Optional[str] = None
     stripe_webhook_secret: Optional[str] = None

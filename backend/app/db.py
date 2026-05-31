@@ -4,8 +4,13 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from .config import settings
 
-connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
-engine = create_engine(settings.database_url, echo=False, connect_args=connect_args)
+# Render/Heroku hand out postgres:// URLs; SQLAlchemy needs postgresql://.
+db_url = settings.database_url
+if db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+connect_args = {"check_same_thread": False} if db_url.startswith("sqlite") else {}
+engine = create_engine(db_url, echo=False, connect_args=connect_args)
 
 
 def init_db() -> None:

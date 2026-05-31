@@ -5,6 +5,7 @@ pydantic-settings>=2.2
 python-jose[cryptography]>=3.3
 httpx>=0.27
 python-multipart>=0.0.9
+psycopg2-binary>=2.9   # Postgres driver (prod); harmless locally on SQLite
 # Optional — only needed for the Google Sheets ingest (imported lazily):
 #   google-api-python-client>=2.0
 #   google-auth>=2.0

@@ -7,6 +7,7 @@ from sqlmodel import Session
 from .config import settings
 from .db import engine, init_db
 from .routers import auth, billing, data, ingest, keys, prices
+from .scheduler import start_scheduler
 from .seed import seed_if_empty
 
 
@@ -15,7 +16,10 @@ async def lifespan(app: FastAPI):
     init_db()
     with Session(engine) as session:
         seed_if_empty(session)
+    task = start_scheduler()  # auto re-sync the sheet if configured
     yield
+    if task:
+        task.cancel()
 
 
 app = FastAPI(
