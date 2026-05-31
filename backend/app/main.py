@@ -7,16 +7,21 @@ from sqlmodel import Session
 from .config import settings
 from .db import engine, init_db
 from .routers import auth, billing, data, ingest, keys, prices
-from .scheduler import start_scheduler
+from .scheduler import run_ingest_once, start_scheduler
 from .seed import seed_if_empty
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    with Session(engine) as session:
-        seed_if_empty(session)
-    task = start_scheduler()  # auto re-sync the sheet if configured
+    if settings.google_sheet_id:
+        # Live source: pull from the Google Sheet at startup — never serve the bundled snapshot.
+        await run_ingest_once()
+    else:
+        # No sheet configured (local/demo): fall back to the bundled JSON so the API isn't empty.
+        with Session(engine) as session:
+            seed_if_empty(session)
+    task = start_scheduler()  # keep re-syncing the sheet on the configured interval
     yield
     if task:
         task.cancel()
