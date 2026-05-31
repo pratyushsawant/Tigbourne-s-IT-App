@@ -104,6 +104,13 @@ describe('fieldEconomics', () => {
     expect(Number.isFinite(d.ceor.npv)).toBe(true)
   })
 
+  it('intervention NPV at the field water cut ties to the headline uplift (same chem basis)', () => {
+    // Field at 40% water cut → the curve point at 40% should ≈ the headline CEOR uplift.
+    const eco = fieldEconomics(makeField({ waterCut: 40 }))
+    const at40 = eco.intervention.find((p) => p.waterCut === 40)!
+    expect(Math.abs(at40.npv - eco.uplift) / Math.abs(eco.uplift)).toBeLessThan(0.05)
+  })
+
   it('water-cut intervention curve is downward-sloping (early intervention worth substantially more)', () => {
     const curve = fieldEconomics(makeField()).intervention
     expect(curve.length).toBeGreaterThan(2)

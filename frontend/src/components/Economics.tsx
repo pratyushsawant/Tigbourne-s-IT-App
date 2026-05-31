@@ -223,9 +223,9 @@ export function Economics({ field }: { field: OilField }) {
       <div className="rounded-2xl border border-black/[0.06] bg-white p-6 shadow-card">
         <h3 className="text-sm font-semibold text-ink">NPV — with vs without CEOR</h3>
         <p className="mt-0.5 text-xs text-ink-faint">
-          Cumulative discounted cash flow at ${scenario.price}/bbl. CEOR starts negative (program capex of{' '}
-          {usdCompact(eco.capex)}) then{' '}
-          {upliftPos ? 'overtakes the base case as enhanced recovery pays back.' : 'fails to pay back — this field is a poor CEOR candidate.'}
+          Cumulative discounted cash flow — year-1 oil at ${scenario.price}/bbl, following the forward curve. The CEOR
+          line carries the chemical-flood cost; the gap at year {scenario.years} is the uplift,{' '}
+          {upliftPos ? `${usdCompact(eco.uplift)} in favour of chemicals.` : `${usdCompact(eco.uplift)} — CEOR doesn't pay back here.`}
         </p>
         <div className="mt-5 h-72">
           <ResponsiveContainer width="100%" height="100%">

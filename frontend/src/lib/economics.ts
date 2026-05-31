@@ -288,13 +288,17 @@ function interventionCurve(f: OilField, A: Assumptions): InterventionPoint[] {
   const pts: InterventionPoint[] = []
   for (let w = 10; w <= 90; w += 10) {
     const s = clamp(rq * waterScore(w), 0, 1)
-    const cost = lift + chemPerBblOil(w, A)
+    const chem = chemPerBblOil(w, A)
     const ceorQ = ceorCurve(q0, decline, s, A)
+    // CEOR uplift at this water cut = incremental oil value − the field-wide chemical flood
+    // (charged on ALL treated oil, not just the incremental barrels) − infra. Same basis as the
+    // headline uplift and the CEOR-vs-drill card, so the chart ties out at the current water cut.
     let npv = -capex
     for (let t = 1; t <= A.years; t++) {
-      const incremental = Math.max(ceorQ[t - 1] - baseQ[t - 1], 0)
-      const netback = priceForYear(t, A.basePrice) - cost
-      npv += incremental * A.daysPerYear * netback * (1 / Math.pow(1 + A.discountRate, t))
+      const disc = 1 / Math.pow(1 + A.discountRate, t)
+      const inc = Math.max(ceorQ[t - 1] - baseQ[t - 1], 0)
+      npv += inc * A.daysPerYear * (priceForYear(t, A.basePrice) - lift) * disc
+      npv -= ceorQ[t - 1] * A.daysPerYear * chem * disc
     }
     pts.push({ waterCut: w, npv })
   }
