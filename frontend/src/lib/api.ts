@@ -17,11 +17,12 @@ function authHeaders(json = false): Record<string, string> {
   return h
 }
 
-/** GET → parsed JSON, or null on any failure (caller falls back). */
-export async function apiGet<T>(path: string): Promise<T | null> {
+/** GET → parsed JSON, or null on any failure/timeout (caller falls back). Timeout guards against a
+ * cold/slow backend hanging the data bootstrap. */
+export async function apiGet<T>(path: string, timeoutMs = 12000): Promise<T | null> {
   if (!BASE) return null
   try {
-    const res = await fetch(BASE + path, { headers: authHeaders() })
+    const res = await fetch(BASE + path, { headers: authHeaders(), signal: AbortSignal.timeout(timeoutMs) })
     if (!res.ok) return null
     return (await res.json()) as T
   } catch {
