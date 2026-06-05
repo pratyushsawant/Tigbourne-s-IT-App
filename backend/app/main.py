@@ -6,7 +6,7 @@ from sqlmodel import Session
 
 from .config import settings
 from .db import engine, init_db
-from .routers import auth, billing, data, ingest, keys, prices
+from .routers import auth, billing, data, ingest, keys, news, prices
 from .scheduler import run_ingest_once, start_scheduler
 from .seed import seed_if_empty
 
@@ -47,6 +47,7 @@ app.include_router(auth.router)
 app.include_router(keys.router)
 app.include_router(billing.router)
 app.include_router(prices.router)
+app.include_router(news.router)
 app.include_router(ingest.router)
 
 

@@ -2,7 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { Logo } from '../../components/Logo'
-import { IChart, IClose, IGear, IGlobe, ILayers, ILogout, IMenu, IShield, IUpgrade } from '../../components/icons'
+import { IChart, IClose, IGear, IGlobe, ILayers, ILogout, IMenu, INews, IShield, IUpgrade } from '../../components/icons'
 
 function initials(name: string) {
   return name
@@ -44,6 +44,10 @@ export default function AppLayout() {
       <NavLink to="/app/analytics" className={cls} onClick={onClick}>
         <IChart className="h-4 w-4" />
         Analytics
+      </NavLink>
+      <NavLink to="/app/news" className={cls} onClick={onClick}>
+        <INews className="h-4 w-4" />
+        News
       </NavLink>
       {can('dataIntegrity') && (
         <NavLink to="/app/integrity" className={cls} onClick={onClick}>

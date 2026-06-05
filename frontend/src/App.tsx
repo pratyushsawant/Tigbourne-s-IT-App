@@ -10,6 +10,7 @@ import AppLayout from './pages/app/AppLayout'
 import Dashboard from './pages/app/Dashboard'
 import Explorer from './pages/app/Explorer'
 import Analytics from './pages/app/Analytics'
+import News from './pages/app/News'
 import FieldDetail from './pages/app/FieldDetail'
 import Integrity from './pages/app/Integrity'
 import Settings from './pages/app/Settings'
@@ -52,6 +53,7 @@ export default function App() {
           <Route index element={<Dashboard />} />
           <Route path="explorer" element={<Explorer />} />
           <Route path="analytics" element={<Analytics />} />
+          <Route path="news" element={<News />} />
           <Route
             path="integrity"
             element={

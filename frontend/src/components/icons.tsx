@@ -93,6 +93,13 @@ export const IChevron = (p: SVGProps<SVGSVGElement>) => (
     <path d="m6 9 6 6 6-6" />
   </svg>
 )
+export const INews = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="M4 5h13v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5Z" />
+    <path d="M17 8h2a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2" />
+    <path d="M7 8h7M7 12h7M7 16h4" />
+  </svg>
+)
 export const IMenu = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}>
     <path d="M3 6h18M3 12h18M3 18h18" />
