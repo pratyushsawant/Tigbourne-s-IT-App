@@ -126,12 +126,16 @@ export default function Dashboard() {
           <div>
             <h2 className="text-sm font-semibold text-ink">Forward curve — Brent · WTI · Dubai</h2>
             <p className="mt-0.5 text-[11px] text-ink-faint">
-              {forward.source === 'EIA STEO' ? 'EIA STEO forecast' : 'Forward shape'} · Dubai derived · $/bbl
+              {forward.live ? 'EIA STEO forecast' : 'Indicative shape — live feed not connected'} · Dubai derived · $/bbl
             </p>
           </div>
-          <span className="flex items-center gap-1.5 text-[10px] font-medium text-ink-faint">
-            <span className={`h-1.5 w-1.5 rounded-full ${forward.live ? 'bg-emerald-500' : 'bg-ink-faint/50'}`} />
-            {forward.live ? `Live · ${forward.asOf?.slice(0, 10)}` : 'Forecast (reference)'}
+          <span
+            className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+              forward.live ? 'text-emerald-700' : 'bg-amber-50 text-amber-700'
+            }`}
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${forward.live ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+            {forward.live ? `Live · EIA · ${forward.asOf?.slice(0, 10)}` : 'Indicative (not live)'}
           </span>
         </div>
         <div className="mt-4 h-64">
