@@ -106,3 +106,72 @@ export function usePrices(): PriceState {
   }, [])
   return state
 }
+
+// --- Forward / forecast curve (Brent / WTI / Dubai term structure) ---
+export interface ForwardPoint {
+  period: string // "YYYY-MM"
+  brent: number
+  wti: number
+  dubai: number
+}
+export interface ForwardState {
+  points: ForwardPoint[]
+  live: boolean
+  asOf: string
+  source: string
+}
+
+// Annual Brent forward shape (matches FORWARD_CURVE in economics) — offline fallback only.
+const FWD_SHAPE = [
+  62.78, 62.33, 63.54, 65.02, 66.2, 66.92, 67.46, 67.73, 67.74, 67.74, 67.74, 67.74, 67.74,
+  67.74, 67.74, 67.74, 67.74, 67.74, 67.74, 67.74, 67.74, 67.74, 67.74, 67.74, 67.74,
+]
+function shapeRatio(m: number): number {
+  const y = m / 12
+  const i = Math.min(Math.floor(y), FWD_SHAPE.length - 2)
+  return FWD_SHAPE[i] / FWD_SHAPE[0] + (y - i) * ((FWD_SHAPE[i + 1] - FWD_SHAPE[i]) / FWD_SHAPE[0])
+}
+function fallbackForward(quotes: Quote[] = REFERENCE_PRICES): ForwardPoint[] {
+  const get = (s: string) => quotes.find((q) => q.symbol === s)?.price ?? (s === 'BRENT' ? 75 : s === 'WTI' ? 71.2 : 73.4)
+  const brent = get('BRENT')
+  const dubaiDiff = brent - get('DUBAI')
+  const wti = get('WTI')
+  const now = new Date()
+  const pts: ForwardPoint[] = []
+  for (let m = 0; m < 24; m++) {
+    const idx = now.getMonth() + m
+    const period = `${now.getFullYear() + Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, '0')}`
+    const r = shapeRatio(m)
+    const b = Math.round(brent * r * 100) / 100
+    pts.push({ period, brent: b, wti: Math.round(wti * r * 100) / 100, dubai: Math.round((b - dubaiDiff) * 100) / 100 })
+  }
+  return pts
+}
+
+let fwdCache: ForwardState | null = null
+let fwdInflight: Promise<ForwardState | null> | null = null
+
+async function fetchForward(): Promise<ForwardState | null> {
+  const data = await apiGet<{ months: ForwardPoint[]; live: boolean; asOf: string; source: string }>('/api/prices/forward')
+  if (data && Array.isArray(data.months) && data.months.length) {
+    return { points: data.months, live: data.live, asOf: data.asOf, source: data.source }
+  }
+  return null
+}
+
+export function useForwardCurve(): ForwardState {
+  const [state, setState] = useState<ForwardState>(
+    fwdCache ?? { points: fallbackForward(), live: false, asOf: 'forecast', source: 'shape' },
+  )
+  useEffect(() => {
+    if (fwdCache?.live) return
+    fwdInflight ??= fetchForward()
+    fwdInflight.then((r) => {
+      if (r) {
+        fwdCache = r
+        setState(r)
+      }
+    })
+  }, [])
+  return state
+}

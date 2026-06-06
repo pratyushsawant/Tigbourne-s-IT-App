@@ -1,11 +1,19 @@
 import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { FIELDS, REGIONS, fmt, COL_BY_KEY } from '../../lib/fields'
 import { quickUplift, suitabilityFactor, usdCompact } from '../../lib/economics'
 import { useAuth } from '../../context/AuthContext'
-import { usePrices } from '../../lib/prices'
+import { usePrices, useForwardCurve } from '../../lib/prices'
 import { useDocumentTitle } from '../../lib/useDocumentTitle'
 import { IArrow, IBolt, IDrop, IGlobe, ILayers } from '../../components/icons'
+
+/** "2026-06" → "Jun '26" */
+function fmtPeriod(p: string): string {
+  const [y, m] = p.split('-')
+  const mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][Number(m) - 1] || m
+  return `${mon} '${y.slice(2)}`
+}
 
 function greeting(): string {
   const h = new Date().getHours()
@@ -17,6 +25,7 @@ export default function Dashboard() {
   const { user } = useAuth()
   const nav = useNavigate()
   const prices = usePrices()
+  const forward = useForwardCurve()
 
   const totalOil = useMemo(() => FIELDS.reduce((s, f) => s + (f.oilBblPerDay || 0), 0), [])
   const sweet = useMemo(
@@ -109,6 +118,65 @@ export default function Dashboard() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Forward curve — Brent / WTI / Dubai */}
+      <div className="mt-6 rounded-2xl border border-black/[0.06] bg-white p-6 shadow-card">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold text-ink">Forward curve — Brent · WTI · Dubai</h2>
+            <p className="mt-0.5 text-[11px] text-ink-faint">
+              {forward.source === 'EIA STEO' ? 'EIA STEO forecast' : 'Forward shape'} · Dubai derived · $/bbl
+            </p>
+          </div>
+          <span className="flex items-center gap-1.5 text-[10px] font-medium text-ink-faint">
+            <span className={`h-1.5 w-1.5 rounded-full ${forward.live ? 'bg-emerald-500' : 'bg-ink-faint/50'}`} />
+            {forward.live ? `Live · ${forward.asOf?.slice(0, 10)}` : 'Forecast (reference)'}
+          </span>
+        </div>
+        <div className="mt-4 h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={forward.points} margin={{ left: 4, right: 12, top: 8, bottom: 4 }}>
+              <CartesianGrid stroke="rgba(0,0,0,0.05)" vertical={false} />
+              <XAxis
+                dataKey="period"
+                tick={{ fontSize: 11, fill: '#8e8e93' }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={fmtPeriod}
+                minTickGap={28}
+              />
+              <YAxis
+                width={52}
+                tick={{ fontSize: 11, fill: '#8e8e93' }}
+                axisLine={false}
+                tickLine={false}
+                domain={['auto', 'auto']}
+                tickFormatter={(v) => `$${v}`}
+              />
+              <Tooltip
+                contentStyle={{ borderRadius: 12, border: '1px solid rgba(0,0,0,0.08)', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', fontSize: 12 }}
+                labelFormatter={(l) => fmtPeriod(String(l))}
+                formatter={(v: number, n) => [`$${Number(v).toFixed(2)}`, String(n)]}
+              />
+              <Line type="monotone" dataKey="brent" name="Brent" stroke="#c8922f" strokeWidth={2.5} dot={false} />
+              <Line type="monotone" dataKey="wti" name="WTI" stroke="#1a1a1a" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="dubai" name="Dubai" stroke="#2563eb" strokeWidth={2} strokeDasharray="5 3" dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-5 text-xs text-ink-soft">
+          {[
+            { c: '#c8922f', t: 'Brent' },
+            { c: '#1a1a1a', t: 'WTI' },
+            { c: '#2563eb', t: 'Dubai (derived)' },
+          ].map((i) => (
+            <span key={i.t} className="flex items-center gap-1.5">
+              <span className="h-2.5 w-5 rounded-full" style={{ background: i.c }} />
+              {i.t}
+            </span>
+          ))}
+        </div>
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1.6fr_1fr]">
