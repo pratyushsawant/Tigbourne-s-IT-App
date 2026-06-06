@@ -206,6 +206,30 @@ async def forward() -> dict:
     return data
 
 
+@router.get("/debug")
+async def debug() -> dict:
+    """Diagnostic: which price sources work from this host, and is the EIA key present?
+    Never leaks the key — it's redacted from any error text and only reported as a boolean."""
+    def scrub(msg: str) -> str:
+        return msg.replace(settings.eia_api_key, "***") if settings.eia_api_key else msg
+
+    out: dict = {"eia_key_present": bool(settings.eia_api_key), "sources": {}}
+    async with httpx.AsyncClient(timeout=12, follow_redirects=True) as client:
+        for name, fn in (("eia", _eia), ("fred", _fred), ("yahoo", _yahoo), ("stooq", _stooq)):
+            try:
+                q = await fn(client)
+                ok = bool(q.get("BRENT") and q.get("WTI"))
+                out["sources"][name] = {"ok": ok, "brent": (q.get("BRENT") or (None,))[0]}
+            except Exception as e:  # noqa: BLE001
+                out["sources"][name] = {"ok": False, "error": scrub(f"{type(e).__name__}: {str(e)[:150]}")}
+        try:
+            m = await _steo_curve(client)
+            out["sources"]["steo"] = {"ok": True, "months": len(m)}
+        except Exception as e:  # noqa: BLE001
+            out["sources"]["steo"] = {"ok": False, "error": scrub(f"{type(e).__name__}: {str(e)[:150]}")}
+    return out
+
+
 @router.get("/forward-curve")
 async def forward_curve() -> dict:
     now = time.time()
