@@ -20,7 +20,7 @@ export function MarketingShell({ children }: { children: ReactNode }) {
             <Link to="/signin" className="transition hover:text-ink">
               Sign in
             </Link>
-            <Link to="/signin" className="btn-gold !px-5 !py-2.5">
+            <Link to="/signin" className="btn-dark !px-5 !py-2.5">
               Request access
             </Link>
           </nav>

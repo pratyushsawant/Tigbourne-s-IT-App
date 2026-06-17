@@ -138,7 +138,7 @@ export default function Settings() {
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-gold-600">API keys</h2>
           {isEnterprise && (
-            <button onClick={addKey} className="btn-gold !px-4 !py-2">Generate key</button>
+            <button onClick={addKey} className="btn-dark !px-4 !py-2">Generate key</button>
           )}
         </div>
 
@@ -185,7 +185,7 @@ export default function Settings() {
           <div className="w-full max-w-md rounded-2xl bg-white p-7 shadow-float animate-fade-up" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-ink">Billing portal</h3>
             <p className="mt-2 text-sm leading-relaxed text-ink-muted">{modal}</p>
-            <button onClick={() => setModal(null)} className="btn-gold mt-5 w-full !py-3">Got it</button>
+            <button onClick={() => setModal(null)} className="btn-dark mt-5 w-full !py-3">Got it</button>
           </div>
         </div>
       )}

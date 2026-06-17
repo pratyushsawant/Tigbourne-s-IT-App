@@ -29,7 +29,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <p className="mt-2 text-sm text-ink-muted">
               An unexpected error interrupted the page. Reloading usually fixes it.
             </p>
-            <button onClick={() => window.location.reload()} className="btn-gold mt-6">
+            <button onClick={() => window.location.reload()} className="btn-dark mt-6">
               Reload
             </button>
           </div>

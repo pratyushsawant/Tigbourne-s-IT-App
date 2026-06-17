@@ -35,7 +35,7 @@ function StubModal({ message, onClose }: { message: string; onClose: () => void 
       <div className="w-full max-w-md rounded-2xl bg-white p-7 shadow-float animate-fade-up" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-lg font-semibold text-ink">Checkout ready</h3>
         <p className="mt-2 text-sm leading-relaxed text-ink-muted">{message}</p>
-        <button onClick={onClose} className="btn-gold mt-5 w-full !py-3">
+        <button onClick={onClose} className="btn-dark mt-5 w-full !py-3">
           Got it
         </button>
       </div>
@@ -104,7 +104,7 @@ export default function Pricing() {
                   <button
                     onClick={() => choose(tier)}
                     disabled={busy === tier || current}
-                    className={`mt-6 w-full !py-3 ${m.highlight ? 'btn-gold' : 'btn-dark'} disabled:opacity-60`}
+                    className="mt-6 w-full !py-3 btn-dark disabled:opacity-60"
                   >
                     {current ? 'Your current plan' : busy === tier ? 'Starting…' : m.cta === 'sales' ? 'Contact sales' : 'Start subscription'}
                   </button>

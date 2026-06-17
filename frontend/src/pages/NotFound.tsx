@@ -24,7 +24,7 @@ export default function NotFound() {
             <Link to="/" className="btn-dark">
               Back to home
             </Link>
-            <Link to="/app" className="btn-gold">
+            <Link to="/app" className="btn-dark">
               Open the platform <IArrow className="h-4 w-4" />
             </Link>
           </div>

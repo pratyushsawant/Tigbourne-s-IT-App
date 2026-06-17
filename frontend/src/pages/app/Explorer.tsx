@@ -312,7 +312,7 @@ export default function Explorer() {
                         setExportOpen(false)
                         nav('/pricing')
                       }}
-                      className="btn-gold mt-3 w-full !py-2 text-xs"
+                      className="btn-dark mt-3 w-full !py-2 text-xs"
                     >
                       View plans
                     </button>

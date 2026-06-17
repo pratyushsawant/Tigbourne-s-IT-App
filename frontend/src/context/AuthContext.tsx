@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { apiEnabled, apiGet, apiPost, setToken } from '../lib/api'
+import { useUser, useClerk } from '@clerk/clerk-react'
 
 export type Tier = 'Individual' | 'Institutional' | 'Enterprise'
 export type Permission = 'economics' | 'export' | 'dataIntegrity'
@@ -78,31 +78,16 @@ export interface AuthResult {
   ok: boolean
   error?: string
 }
-export interface RegisterPayload {
-  email: string
-  password: string
-  name?: string
-  org?: string
-  tier?: Tier
-}
 
 interface AuthState {
   user: User | null
-  signIn: (email: string, opts?: Partial<User>) => void
-  login: (email: string, password: string) => Promise<AuthResult>
-  register: (payload: RegisterPayload) => Promise<AuthResult>
   signOut: () => void
   updateUser: (partial: Partial<User>) => void
   can: (p: Permission) => boolean
 }
 
-interface TokenResponse {
-  access_token: string
-  user: { email: string; name: string; org: string; tier: Tier }
-}
-
 const AuthContext = createContext<AuthState | null>(null)
-const KEY = 'tigbourne.session'
+const TIER_KEY = 'tigbourne.tier'
 
 function deriveOrg(email: string): string {
   const domain = email.split('@')[1] || 'tigbourne.com'
@@ -110,102 +95,61 @@ function deriveOrg(email: string): string {
   return base.charAt(0).toUpperCase() + base.slice(1)
 }
 
-function loadSession(): User | null {
+function loadTier(): Tier {
   try {
-    const saved = localStorage.getItem(KEY)
-    return saved ? (JSON.parse(saved) as User) : null
-  } catch {
-    return null
-  }
+    const saved = localStorage.getItem(TIER_KEY)
+    if (saved && ['Individual', 'Institutional', 'Enterprise'].includes(saved)) return saved as Tier
+  } catch {}
+  return 'Enterprise'
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // Read synchronously on first render so a hard reload of /app keeps the session.
-  const [user, setUser] = useState<User | null>(loadSession)
+  const { isSignedIn, user: clerkUser, isLoaded } = useUser()
+  const { signOut: clerkSignOut } = useClerk()
+  const [tier, setTier] = useState<Tier>(loadTier)
+  const [user, setUser] = useState<User | null>(null)
 
-  const signIn: AuthState['signIn'] = (email, opts) => {
-    const namePart = email.split('@')[0].replace(/[._-]+/g, ' ')
-    const name =
-      opts?.name ||
-      namePart
-        .split(' ')
-        .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-        .join(' ')
-    const u: User = {
-      email,
-      name: name || 'Analyst',
-      org: opts?.org || deriveOrg(email),
-      tier: opts?.tier || 'Enterprise',
-    }
-    setUser(u)
-    localStorage.setItem(KEY, JSON.stringify(u))
-  }
-
-  // If a JWT is present (real backend), hydrate the user from /api/auth/me on load.
+  // Hydrate our User from Clerk's session whenever it changes
   useEffect(() => {
-    if (!apiEnabled) return
-    apiGet<TokenResponse['user']>('/api/auth/me').then((me) => {
-      if (me) {
-        setUser(me)
-        localStorage.setItem(KEY, JSON.stringify(me))
+    if (!isLoaded) return
+    if (isSignedIn && clerkUser) {
+      const email = clerkUser.primaryEmailAddress?.emailAddress || ''
+      const name =
+        [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') ||
+        email.split('@')[0].replace(/[._-]+/g, ' ')
+      const u: User = {
+        email,
+        name,
+        org: deriveOrg(email),
+        tier,
       }
-    })
-  }, [])
-
-  function persist(u: User) {
-    setUser(u)
-    localStorage.setItem(KEY, JSON.stringify(u))
-  }
-
-  const login: AuthState['login'] = async (email, password) => {
-    if (apiEnabled) {
-      const res = await apiPost<TokenResponse>('/api/auth/login', { email, password })
-      if (res.ok && res.data) {
-        setToken(res.data.access_token)
-        persist(res.data.user)
-        return { ok: true }
-      }
-      if (res.status === 401) return { ok: false, error: 'Invalid email or password' }
-      // status 0 → backend unreachable: fall through to mock so the demo still works.
+      setUser(u)
+    } else {
+      setUser(null)
     }
-    signIn(email)
-    return { ok: true }
-  }
-
-  const register: AuthState['register'] = async (payload) => {
-    if (apiEnabled) {
-      const res = await apiPost<TokenResponse>('/api/auth/signup', payload)
-      if (res.ok && res.data) {
-        setToken(res.data.access_token)
-        persist(res.data.user)
-        return { ok: true }
-      }
-      if (res.status === 409) return { ok: false, error: 'That email is already registered' }
-      if (res.status && res.status >= 400 && res.status < 500) return { ok: false, error: 'Could not create account' }
-    }
-    signIn(payload.email, { name: payload.name, org: payload.org, tier: payload.tier })
-    return { ok: true }
-  }
+  }, [isSignedIn, clerkUser, isLoaded, tier])
 
   const signOut = () => {
     setUser(null)
-    setToken(null)
-    localStorage.removeItem(KEY)
+    localStorage.removeItem(TIER_KEY)
+    clerkSignOut()
   }
 
-  const updateUser: AuthState['updateUser'] = (partial) => {
+  const updateUser = (partial: Partial<User>) => {
+    if (partial.tier) {
+      setTier(partial.tier)
+      localStorage.setItem(TIER_KEY, partial.tier)
+    }
     setUser((prev) => {
       if (!prev) return prev
-      const next = { ...prev, ...partial }
-      localStorage.setItem(KEY, JSON.stringify(next))
-      return next
+      return { ...prev, ...partial }
     })
   }
 
   const can = (p: Permission) => (user ? tierCan(user.tier, p) : false)
 
   return (
-    <AuthContext.Provider value={{ user, signIn, login, register, signOut, updateUser, can }}>
+    <AuthContext.Provider value={{ user, signOut, updateUser, can }}>
       {children}
     </AuthContext.Provider>
   )

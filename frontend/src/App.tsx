@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { useUser } from '@clerk/clerk-react'
 import { useAuth } from './context/AuthContext'
 import Landing from './pages/Landing'
 import SignIn from './pages/SignIn'
@@ -19,9 +20,10 @@ import type { Permission } from './context/AuthContext'
 import type { ReactNode } from 'react'
 
 function Protected({ children }: { children: ReactNode }) {
-  const { user } = useAuth()
+  const { isSignedIn, isLoaded } = useUser()
   const loc = useLocation()
-  if (!user) return <Navigate to="/signin" state={{ from: loc.pathname }} replace />
+  if (!isLoaded) return null
+  if (!isSignedIn) return <Navigate to="/signin" state={{ from: loc.pathname }} replace />
   return <>{children}</>
 }
 

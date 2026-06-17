@@ -47,7 +47,7 @@ function Nav() {
           <Link to="/signin" className="hidden text-sm font-semibold text-ink-soft transition hover:text-ink sm:block">
             Sign in
           </Link>
-          <Link to="/signin" className="btn-gold !px-5 !py-2.5">
+          <Link to="/signin" className="btn-dark !px-5 !py-2.5">
             Request access
           </Link>
         </div>
@@ -115,7 +115,7 @@ function Hero() {
             institutional-grade analysis.
           </p>
           <div className="animate-fade-up mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row [animation-delay:160ms]">
-            <Link to="/signin" className="btn-gold group w-full sm:w-auto">
+            <Link to="/signin" className="btn-dark group w-full sm:w-auto">
               Enter the platform
               <IArrow className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
@@ -496,7 +496,7 @@ function CTA() {
               Enter the platform and screen {FIELDS.length.toLocaleString()} fields in seconds.
             </p>
             <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Link to="/signin" className="btn-gold w-full sm:w-auto">Enter the platform</Link>
+              <Link to="/signin" className="btn-dark w-full sm:w-auto">Enter the platform</Link>
               <Link to="/signin" className="btn-ghost w-full border-white/20 bg-white/10 text-white hover:bg-white/15 sm:w-auto">
                 Request enterprise access
               </Link>

@@ -83,7 +83,7 @@ export default function Contact() {
                       className="mt-1.5 w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-sm text-ink outline-none transition focus:border-gold-400 focus:ring-4 focus:ring-gold-100"
                     />
                   </div>
-                  <button type="submit" className="btn-gold w-full !py-3.5">
+                  <button type="submit" className="btn-dark w-full !py-3.5">
                     Request a quote
                   </button>
                   <p className="text-center text-[11px] text-ink-faint">

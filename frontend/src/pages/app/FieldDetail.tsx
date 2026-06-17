@@ -187,7 +187,7 @@ export default function FieldDetail() {
               NPV with vs. without CEOR, break-even oil price, the water-cut intervention curve and CEOR-vs-drilling
               comparison are included with the Institutional and Enterprise tiers. Your plan is view-only.
             </p>
-            <Link to="/pricing" className="btn-gold mt-5 !py-2.5">
+            <Link to="/pricing" className="btn-dark mt-5 !py-2.5">
               View plans
             </Link>
           </div>

@@ -256,7 +256,7 @@ export default function Dashboard() {
               <p className="mt-1.5 text-sm text-white/70">
                 Filter {FIELDS.length.toLocaleString()} fields by water cut, API, temperature and cost — then export.
               </p>
-              <Link to="/app/explorer" className="btn-gold mt-5 !py-2.5">
+              <Link to="/app/explorer" className="btn-dark mt-5 !py-2.5">
                 Open Field Explorer
                 <IArrow className="h-4 w-4" />
               </Link>

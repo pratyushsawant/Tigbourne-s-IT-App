@@ -1,19 +1,25 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
+import { ClerkProvider } from '@clerk/clerk-react'
 import App from './App.tsx'
 import { AuthProvider } from './context/AuthContext.tsx'
 import { bootstrapData } from './lib/bootstrap.ts'
 import './index.css'
 
+const CLERK_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string
+if (!CLERK_KEY) throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY in .env')
+
 const root = ReactDOM.createRoot(document.getElementById('root')!)
 const tree = (
   <React.StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </BrowserRouter>
+    <ClerkProvider publishableKey={CLERK_KEY}>
+      <BrowserRouter>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </BrowserRouter>
+    </ClerkProvider>
   </React.StrictMode>
 )
 
