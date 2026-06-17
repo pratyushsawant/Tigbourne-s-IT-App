@@ -88,7 +88,42 @@ npm install
 npm run dev
 ```
 
-Opens at http://localhost:5173. Enter any email/password to log in (placeholder auth).
+Opens at http://localhost:5173. Auth is handled by Clerk — you need `VITE_CLERK_PUBLISHABLE_KEY` in `.env`.
+
+## Clerk Auth Migration (2026-06-17)
+
+Replaced the entire mock/localStorage auth system with **Clerk** (paid plan, work emails only).
+
+### What changed
+- **`@clerk/clerk-react`** added as a dependency
+- **`main.tsx`** — app wrapped in `<ClerkProvider>` using `VITE_CLERK_PUBLISHABLE_KEY` from `.env`
+- **`AuthContext.tsx`** — gutted the mock `signIn`/`login`/`register` functions and custom JWT handling. Now uses Clerk's `useUser()` and `useClerk()` to hydrate a local `User` object. Tier-based permission gating (`can('economics')`, etc.) is unchanged and still managed locally
+- **`App.tsx`** — `Protected` route guard now checks `useUser().isSignedIn` instead of the local auth state
+- **`SignIn.tsx`** — removed the custom form (email, password, tier selector, demo account). Now renders Clerk's `<SignIn>` and `<SignUp>` components with custom appearance tokens to match the app's design
+- **`ErrorBoundary.tsx` / `MarketingShell.tsx`** — minor button class change (`btn-gold` -> `btn-dark`)
+- **`.gitignore`** — added `clerk-nextjs/` and `*.tsbuildinfo`
+
+### What was removed
+- Mock login (any email/password worked)
+- Demo account button ("Continue with demo account" as `analyst@ubs.com`)
+- Custom `RegisterPayload` type and `register()` function
+- All `apiPost`/`apiGet` auth calls (`/api/auth/login`, `/api/auth/signup`, `/api/auth/me`)
+- `setToken()` JWT management from the auth flow
+
+### What stayed the same
+- Tier system (`Individual` / `Institutional` / `Enterprise`) and `can(permission)` gating
+- `AuthProvider` context shape (minus the removed sign-in methods)
+- All app pages, routing, and protected route logic
+- Tier is still persisted in localStorage (`tigbourne.tier`) — Clerk owns identity, we own tier
+
+### Env requirement
+The app requires `VITE_CLERK_PUBLISHABLE_KEY` in `.env` (not committed). Without it, the app will throw on startup.
+
+### Commits
+- `e18ad25` — Replace mock auth with Clerk
+- `110d3d4` — Add clerk-nextjs/ and *.tsbuildinfo to .gitignore
+
+---
 
 ## Where We Left Off
 
@@ -99,7 +134,7 @@ Everything below is **done and working** — the frontend scaffold is complete w
 - All 4 components built: Sidebar, Layout, FilterPanel, ExportMenu
 - Export works for CSV, PDF, DOCX (client-side generation)
 - 16 mock oil fields loaded as placeholder data
-- Auth is placeholder (localStorage) — any email/password works
+- Auth is **Clerk** (real authentication, work emails only)
 - No API connected yet — everything reads from `src/data/mockFields.ts`
 
 **Blocked on (waiting for other team members):**
@@ -118,8 +153,8 @@ Everything below is **done and working** — the frontend scaffold is complete w
 5. Add loading states and error handling for API requests
 
 **Week 4 — MVP completion:**
-6. Wire up JWT authentication to the real login endpoint — replace localStorage auth
-7. Add user permission levels (admin, institutional, individual) to the UI
+6. ~~Wire up JWT authentication to the real login endpoint~~ — **Done (Clerk)**
+7. ~~Add user permission levels~~ — **Done (tier-based gating via AuthContext)**
 8. Test end-to-end: filter -> view -> export with real data
 9. Data visualisation graphs (optional for MVP, add if time allows)
 

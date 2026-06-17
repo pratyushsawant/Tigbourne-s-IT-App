@@ -11,7 +11,7 @@ per-field economics, and export analysis. Built to be sold to Fortune 500/1000 b
 
 ## Stack
 - **Vite + React 18 + TypeScript + Tailwind CSS 3**; React Router 6; Recharts for charts.
-- No backend yet — data is bundled JSON. Auth is mock (localStorage); billing is stubbed for Stripe.
+- No backend yet — data is bundled JSON. Auth is **Clerk** (paid plan, work emails only); billing is stubbed for Stripe.
 - State: React Context only (`AuthContext`). No Redux/Zustand.
 
 ## Commands
@@ -30,7 +30,9 @@ per-field economics, and export analysis. Built to be sold to Fortune 500/1000 b
 - `src/lib/integrity.ts` — data-quality (audit log + mismatches) derived from `src/data/integrity.json`.
 - `src/lib/prices.ts` — live-price hook with reference fallback.
 - `src/lib/billing.ts` — Stripe-ready checkout entrypoints (stubbed until backend exists).
-- `src/context/AuthContext.tsx` — mock auth, permission tiers, `can(permission)` gating.
+- `src/context/AuthContext.tsx` — Clerk-backed auth, permission tiers, `can(permission)` gating.
+  Clerk handles login/signup/session; AuthContext hydrates a local `User` from `useUser()` and layers
+  tier-based permissions on top. Tier is persisted in localStorage (`tigbourne.tier`).
 - `src/pages/**` — marketing (Landing, Pricing, Contact, Legal), auth (SignIn), app (Dashboard,
   Explorer, FieldDetail, Analytics, Integrity, Settings).
 - `src/data/fields.json`, `src/data/integrity.json` — generated from the source Excel (see below).
